@@ -1,0 +1,63 @@
+{
+  "name": "sentinelx-backend",
+  "version": "1.0.0",
+  "description": "SentinelX – AI-Powered Industrial Asset Intelligence Platform API",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "nodemon --watch src --ext ts,json --exec tsx src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "type-check": "tsc --noEmit",
+    "simulate:esp32": "tsx src/utils/mqttTestPublisher.ts"
+  },
+  "keywords": [
+    "sentinelx",
+    "iot",
+    "industrial",
+    "predictive-maintenance"
+  ],
+  "author": "SentinelX",
+  "license": "ISC",
+  "dependencies": {
+    "@types/nodemailer": "^8.0.1",
+    "@types/papaparse": "^5.5.2",
+    "@types/pg": "^8.20.0",
+    "axios": "^1.18.1",
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^1.41.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.0.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.14.0",
+    "morgan": "^1.10.0",
+    "mqtt": "^5.15.2",
+    "multer": "^2.2.0",
+    "multer-storage-cloudinary": "^4.0.0",
+    "nodemailer": "^9.0.3",
+    "papaparse": "^5.5.4",
+    "pg": "^8.22.0",
+    "socket.io": "^4.8.3",
+    "uuid": "^11.0.0",
+    "winston": "^3.19.0",
+    "xlsx": "^0.18.5",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.8",
+    "@types/cors": "^2.8.18",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/morgan": "^1.9.10",
+    "@types/multer": "^1.4.13",
+    "@types/node": "^22.15.21",
+    "@types/uuid": "^10.0.0",
+    "nodemon": "^3.1.9",
+    "tsx": "^4.23.1",
+    "typescript": "^5.8.3"
+  }
+}

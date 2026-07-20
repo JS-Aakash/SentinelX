@@ -1,0 +1,121 @@
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import path from 'path';
+
+import { env } from './config/env';
+import { connectDB } from './config/database';
+import { corsOptions } from './config/cors';
+import { morganMiddleware } from './middlewares/logger.middleware';
+import { globalRateLimiter } from './middlewares/rateLimiter.middleware';
+import { errorHandler, notFoundHandler } from './middlewares/error.middleware';
+import v1Routes from './routes/v1/index';
+import { logger } from './utils/logger';
+
+const app = express();
+
+// ─── Security Middleware ────────────────────────────────────────────────────
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow serving uploaded files
+  })
+);
+app.use(cors(corsOptions));
+
+// ─── Request Parsing ────────────────────────────────────────────────────────
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
+
+// ─── Logging ────────────────────────────────────────────────────────────────
+app.use(morganMiddleware);
+
+// ─── Rate Limiting ──────────────────────────────────────────────────────────
+app.use(globalRateLimiter);
+
+// ─── Static Files (Uploads) ─────────────────────────────────────────────────
+app.use('/uploads', express.static(path.join(process.cwd(), env.UPLOAD_DIR)));
+
+// ─── API Routes ─────────────────────────────────────────────────────────────
+app.use('/api/v1', v1Routes);
+
+// ─── Root health check ──────────────────────────────────────────────────────
+app.get('/', (_req, res) => {
+  res.json({
+    success: true,
+    message: '🛡️ SentinelX API – Predict. Prevent. Prolong.',
+    version: '1.0.0',
+    docs: '/api/v1/health',
+  });
+});
+
+// ─── Error Handling ─────────────────────────────────────────────────────────
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+import http from 'http';
+import { initTimescaleDB } from './database/timescale';
+import { initSocketIO } from './socket';
+import { initMQTTClient } from './mqtt/mqttClient';
+import { DeviceStatusMonitor } from './services/DeviceStatusMonitor';
+
+// Create HTTP Server
+const httpServer = http.createServer(app);
+
+// Initialize Socket.IO
+initSocketIO(httpServer);
+
+// ─── Database + Server Boot ─────────────────────────────────────────────────
+const startServer = async (): Promise<void> => {
+  try {
+    // 1. Connect MongoDB
+    await connectDB();
+
+    // 2. Initialize TimescaleDB / PostgreSQL schemas (non-fatal if unavailable)
+    try {
+      await initTimescaleDB();
+    } catch (tsErr: any) {
+      logger.warn(`⚠️ TimescaleDB init failed (non-fatal): ${tsErr.message || tsErr}. Sensor history will be unavailable until reconnected.`);
+    }
+
+    // 3. Initialize MQTT Broker Client (non-fatal if unavailable)
+    try {
+      initMQTTClient();
+    } catch (mqttErr: any) {
+      logger.warn(`⚠️ MQTT init failed (non-fatal): ${mqttErr.message || mqttErr}. Live ingestion will be unavailable until reconnected.`);
+    }
+
+    // 4. Start Device Online/Offline Heartbeat Monitor
+    DeviceStatusMonitor.start();
+
+    const PORT = Number(env.PORT) || 5000;
+    httpServer.listen(PORT, () => {
+      logger.info(`🚀 SentinelX Server running on port ${PORT}`);
+      logger.info(`🌍 Environment: ${env.NODE_ENV}`);
+      logger.info(`📡 API Base: http://localhost:${PORT}/api/v1`);
+      logger.info(`🔌 Socket.IO Server active on port ${PORT}`);
+    });
+
+    // Graceful shutdown
+    const shutdown = (signal: string) => {
+      logger.info(`${signal} received. Shutting down gracefully...`);
+      DeviceStatusMonitor.stop();
+      httpServer.close(() => {
+        logger.info('HTTP & Socket.IO server closed');
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+  } catch (error) {
+    logger.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
+
+export default app;

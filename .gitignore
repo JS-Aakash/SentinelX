@@ -1,0 +1,65 @@
+# Node / JavaScript dependencies
+**/node_modules/
+**/.next/
+**/build/
+**/dist/
+**/coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Python
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+
+# Trained ML Models & Datasets (keep directories with .gitkeep)
+python-service/models/*.joblib
+python-service/models/*.json
+!python-service/models/.gitkeep
+
+# Local Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+*.env
+
+# Operating System & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
