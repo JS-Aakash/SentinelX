@@ -511,4 +511,107 @@ export class DatasetService {
     ];
     return sampleRows.join('\n');
   }
+
+  /**
+   * Get target file path for live recorded dataset CSV
+   */
+  public static getLiveDatasetFilePath(machineId: string): string {
+    const dir = path.join(process.cwd(), 'uploads', 'live_datasets');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    return path.join(dir, `live_dataset_${machineId}.csv`);
+  }
+
+  /**
+   * Append a single live sensor reading to machine's recorded dataset CSV
+   */
+  public static appendLiveSensorReading(
+    machineId: string,
+    reading: {
+      timestamp: Date;
+      temperature: number;
+      vibration: number;
+      current: number;
+      voltage: number;
+      rpm: number;
+      sound: number;
+    }
+  ): void {
+    const filePath = this.getLiveDatasetFilePath(machineId);
+    const fileExists = fs.existsSync(filePath);
+
+    if (!fileExists) {
+      const header = this.REQUIRED_COLUMNS.join(',') + '\n';
+      fs.writeFileSync(filePath, header, 'utf-8');
+    }
+
+    const isoDate = reading.timestamp.toISOString();
+    const line = `${isoDate},${reading.temperature},${reading.vibration},${reading.current},${reading.voltage},${reading.rpm},${reading.sound}\n`;
+    fs.appendFileSync(filePath, line, 'utf-8');
+  }
+
+  /**
+   * Clear recorded live dataset file for machine
+   */
+  public static clearLiveDatasetFile(machineId: string): void {
+    const filePath = this.getLiveDatasetFilePath(machineId);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  }
+
+  /**
+   * Create or update a Dataset document from live recorded dataset CSV for AI Training
+   */
+  public static async registerDatasetFromLiveRecording(machineId: string, userId: string): Promise<IDataset> {
+    const machine = await Machine.findById(machineId).exec();
+    if (!machine) {
+      throw ApiError.notFound('Machine not found');
+    }
+
+    const filePath = this.getLiveDatasetFilePath(machineId);
+    if (!fs.existsSync(filePath)) {
+      throw ApiError.badRequest('No live recorded dataset exists for this machine');
+    }
+
+    const rawRows = await this.parseUploadedFile(filePath);
+    if (!rawRows || rawRows.length < 5) {
+      throw ApiError.badRequest('Recorded dataset has insufficient rows (minimum 5 required)');
+    }
+
+    const { report, startDate, endDate, samplingInterval } = this.validateRawRows(rawRows);
+
+    // Deactivate previous active datasets
+    await Dataset.updateMany({ machineId: machine._id }, { isActive: false });
+
+    const latest = await Dataset.findOne({ machineId: machine._id }).sort({ version: -1 }).exec();
+    const newVersion = latest ? latest.version + 1 : 1;
+
+    const dataset = await Dataset.create({
+      machineId: machine._id,
+      companyId: machine.companyId,
+      name: `Live Telemetry Dataset v${newVersion} (${machine.name})`,
+      originalFileName: `live_dataset_${machine.machineCode}.csv`,
+      originalFilePath: filePath,
+      fileSizeBytes: fs.statSync(filePath).size,
+      rowCount: rawRows.length,
+      columnCount: this.REQUIRED_COLUMNS.length,
+      columns: this.REQUIRED_COLUMNS,
+      startDate,
+      endDate,
+      samplingInterval: samplingInterval || '5s',
+      status: 'raw',
+      validationReport: report,
+      isActive: true,
+      version: newVersion,
+      createdBy: userId,
+    });
+
+    // Clean & engineer features immediately
+    const cleaned = await this.cleanDataset(dataset._id.toString());
+    const engineered = await this.engineerFeatures(cleaned._id.toString());
+    return engineered;
+  }
 }
+

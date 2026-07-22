@@ -8,6 +8,7 @@ interface AuthState {
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  hasHydrated: boolean;
 
   // Actions
   setAuth: (user: User, company: Company, accessToken: string) => void;
@@ -15,6 +16,7 @@ interface AuthState {
   setUser: (user: User) => void;
   setCompany: (company: Company) => void;
   setLoading: (loading: boolean) => void;
+  setHasHydrated: (hasHydrated: boolean) => void;
   logout: () => void;
 }
 
@@ -26,6 +28,7 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       isAuthenticated: false,
       isLoading: false,
+      hasHydrated: false,
 
       setAuth: (user, company, accessToken) =>
         set({ user, company, accessToken, isAuthenticated: true, isLoading: false }),
@@ -37,6 +40,8 @@ export const useAuthStore = create<AuthState>()(
       setCompany: (company) => set({ company }),
 
       setLoading: (isLoading) => set({ isLoading }),
+
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
       logout: () =>
         set({
@@ -50,6 +55,9 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'sentinelx-auth',
       storage: createJSONStorage(() => localStorage),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
       partialize: (state) => ({
         user: state.user,
         company: state.company,

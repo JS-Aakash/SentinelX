@@ -261,7 +261,7 @@ export class IngestionService {
     // 6. Broadcast update to Socket.IO real-time clients
     broadcastSensorUpdate(reading);
 
-    // 7. Trigger Live AI Inference asynchronously (Non-blocking)
+    // 7. Trigger Live AI Inference asynchronously & process Live Data Recording (Non-blocking)
     if (reading.machineId) {
       InferenceService.processLiveInference({
         machineId: reading.machineId,
@@ -276,6 +276,59 @@ export class IngestionService {
       }).catch((err) => {
         logger.error(`Live AI inference background execution error: ${err.message}`);
       });
+
+      // Process Live Data Recording & AI Lifecycle Status
+      (async () => {
+        try {
+          const { Machine, AILifecycleStatus } = await import('../models/Machine');
+          const { DatasetService } = await import('./DatasetService');
+
+          const machine = await Machine.findById(reading.machineId).exec();
+          if (machine) {
+            if (!machine.liveDataCollection) {
+              machine.liveDataCollection = {
+                collectedSampleCount: 0,
+                recommendedSamplesThreshold: 10000,
+                newSamplesSinceLastTraining: 0,
+              };
+            }
+
+            machine.liveDataCollection.lastReadingTimestamp = reading.timestamp;
+
+            if (machine.isRecording) {
+              // Append to live dataset file
+              DatasetService.appendLiveSensorReading(machine._id.toString(), reading);
+
+              // Update stats
+              machine.liveDataCollection.collectedSampleCount = (machine.liveDataCollection.collectedSampleCount || 0) + 1;
+              if (!machine.liveDataCollection.collectionStartDate) {
+                machine.liveDataCollection.collectionStartDate = reading.timestamp;
+              }
+
+              // Update AI Lifecycle status based on sample thresholds
+              const threshold = machine.liveDataCollection.recommendedSamplesThreshold || 10000;
+              const count = machine.liveDataCollection.collectedSampleCount;
+
+              if (machine.aiLifecycleStatus === AILifecycleStatus.REGISTERED || machine.aiLifecycleStatus === AILifecycleStatus.COLLECTING_DATA) {
+                if (count >= threshold) {
+                  machine.aiLifecycleStatus = AILifecycleStatus.READY_FOR_TRAINING;
+                } else {
+                  machine.aiLifecycleStatus = AILifecycleStatus.COLLECTING_DATA;
+                }
+              } else if (machine.aiLifecycleStatus === AILifecycleStatus.AI_READY) {
+                machine.liveDataCollection.newSamplesSinceLastTraining = (machine.liveDataCollection.newSamplesSinceLastTraining || 0) + 1;
+                if (machine.liveDataCollection.newSamplesSinceLastTraining >= 5000) {
+                  machine.aiLifecycleStatus = AILifecycleStatus.RETRAINING_RECOMMENDED;
+                }
+              }
+            }
+
+            await machine.save();
+          }
+        } catch (recErr: any) {
+          logger.error(`Error processing live data recording: ${recErr.message || recErr}`);
+        }
+      })();
     }
 
     logger.info(`⚡ Successfully processed telemetry for device ${reading.deviceId} (${reading.temperature}°C, ${reading.rpm} RPM)`);

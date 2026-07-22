@@ -14,6 +14,8 @@ import {
   Activity,
   Server,
   Layers,
+  Database,
+  Sliders,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
@@ -41,11 +43,25 @@ const NAV_ITEMS = [
     comingSoon: false,
   },
   {
+    label: 'Data Acquisition',
+    href: '/data-collection',
+    icon: Database,
+    shortcut: '⌘4',
+    comingSoon: false,
+  },
+  {
+    label: 'Sensor Simulator',
+    href: '/simulation',
+    icon: Sliders,
+    shortcut: '⌘5',
+    comingSoon: false,
+  },
+  {
     label: 'Predictive Maint.',
     href: '/maintenance',
     icon: Wrench,
-    shortcut: 'Soon',
-    comingSoon: true,
+    shortcut: '⌘6',
+    comingSoon: false,
   },
   {
     label: 'Advanced Analytics',
@@ -58,7 +74,7 @@ const NAV_ITEMS = [
     label: 'System Settings',
     href: '/settings',
     icon: Settings,
-    shortcut: '⌘5',
+    shortcut: '⌘6',
     comingSoon: false,
   },
 ];
@@ -79,8 +95,7 @@ export function Sidebar() {
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-bold text-white tracking-tight font-mono">SENTINEL</span>
-              <span className="text-xs font-extrabold text-[#00F2FE] font-mono">X</span>
+              <span className="text-sm font-bold text-white tracking-tight font-mono">SENTINELX</span>
             </div>
             <p className="text-[9px] font-mono uppercase tracking-widest text-[#64748B]">
               ASSET INTELLIGENCE

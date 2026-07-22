@@ -33,6 +33,18 @@ import { dashboardApi, DashboardOverview, MachineFleetItem } from '@/api/dashboa
 import { ComingSoonCard } from '@/components/monitoring/ComingSoonCard';
 import { MachineStatusBadge } from '@/components/machines/MachineStatusBadge';
 import { useSocket } from '@/hooks/useSocket';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts';
 
 function StatWidget({
   icon: Icon,
@@ -84,6 +96,34 @@ export default function DashboardClient() {
   const [data, setData] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProfileDetails, setShowProfileDetails] = useState(false);
+  const [selectedDashboardMetric, setSelectedDashboardMetric] = useState<'temperature' | 'rpm' | 'vibration' | 'current'>('temperature');
+
+  const metricMeta = {
+    temperature: { label: 'Temperature', unit: '°C', color: '#F59E0B', key: 'temperature' },
+    rpm: { label: 'Rotational Speed', unit: 'RPM', color: '#10B981', key: 'rpm' },
+    vibration: { label: 'Vibration', unit: 'mm/s', color: '#06B6D4', key: 'vibration' },
+    current: { label: 'Electrical Current', unit: 'A', color: '#3B82F6', key: 'current' },
+  };
+
+  const currentMeta = metricMeta[selectedDashboardMetric];
+
+  // Live telemetry stream buffer for Recharts monitoring graph
+  const [telemetryStream, setTelemetryStream] = useState<Array<{
+    time: string;
+    temperature: number;
+    rpm: number;
+    vibration: number;
+    current: number;
+  }>>(() => {
+    const now = Date.now();
+    return Array.from({ length: 10 }).map((_, i) => ({
+      time: new Date(now - (10 - i) * 3000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      temperature: Number((42 + Math.sin(i) * 3).toFixed(1)),
+      rpm: Math.round(1480 + Math.cos(i) * 30),
+      vibration: Number((0.15 + (i % 3) * 0.04).toFixed(2)),
+      current: Number((4.2 + (i % 2) * 0.3).toFixed(1)),
+    }));
+  });
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -103,9 +143,28 @@ export default function DashboardClient() {
     loadDashboard();
   }, [loadDashboard]);
 
-  // Real-time socket updates for fleet items
+  // Real-time socket updates for fleet items & telemetry chart
   useEffect(() => {
     const unsubscribe = subscribe<any>('sensor:update', (payload) => {
+      if (payload.temperature != null || payload.rpm != null) {
+        const timeLabel = new Date(payload.timestamp || Date.now()).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        });
+
+        setTelemetryStream((prev) => [
+          ...prev.slice(-19),
+          {
+            time: timeLabel,
+            temperature: payload.temperature ?? 45,
+            rpm: payload.rpm ?? 1450,
+            vibration: payload.vibration ?? 0.18,
+            current: payload.current ?? 4.5,
+          },
+        ]);
+      }
+
       setData((prev) => {
         if (!prev) return prev;
         const updatedFleet = prev.machineFleet.map((m) => {
@@ -249,6 +308,117 @@ export default function DashboardClient() {
             unit="W"
             color="bg-[#00F2FE]/10 text-[#00F2FE] border-[#00F2FE]/30"
           />
+        </div>
+      </div>
+
+      {/* ─── Real-Time Operations Telemetry Graph & Analytics ─────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 font-mono">
+        {/* Left Column: Individual Metric Telemetry Stream Graph */}
+        <div className="lg:col-span-2 rounded-xl border border-[#1B1E2B] bg-[#0B0C12] p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-[#00F2FE] animate-pulse" />
+              <h3 className="font-bold text-white text-xs uppercase tracking-wider">
+                INDIVIDUAL METRIC MONITORING: {currentMeta.label.toUpperCase()}
+              </h3>
+            </div>
+            
+            {/* Metric Switcher Pills */}
+            <div className="flex items-center gap-1 bg-[#121522] p-1 rounded-lg border border-[#22273B] text-[10px]">
+              {(['temperature', 'rpm', 'vibration', 'current'] as const).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSelectedDashboardMetric(key)}
+                  className={cn(
+                    'px-2.5 py-1 rounded font-semibold transition-all',
+                    selectedDashboardMetric === key
+                      ? 'bg-[#1E2438] text-white border border-[#3B82F6] shadow-sm'
+                      : 'text-[#64748B] hover:text-white'
+                  )}
+                >
+                  {metricMeta[key].label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="h-60 w-full pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={telemetryStream} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="selectedMetricGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={currentMeta.color} stopOpacity={0.45} />
+                    <stop offset="95%" stopColor={currentMeta.color} stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="time" stroke="#475569" fontSize={10} tickLine={false} />
+                <YAxis stroke="#475569" fontSize={10} tickLine={false} domain={['auto', 'auto']} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#0D0E15', borderColor: '#1E2235', borderRadius: '8px', fontSize: '11px', color: '#fff' }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey={currentMeta.key}
+                  name={`${currentMeta.label} (${currentMeta.unit})`}
+                  stroke={currentMeta.color}
+                  strokeWidth={2.5}
+                  fillOpacity={1}
+                  fill="url(#selectedMetricGrad)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Right Column: Fleet Status Distribution Donut Chart */}
+        <div className="rounded-xl border border-[#1B1E2B] bg-[#0B0C12] p-5 space-y-3 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-white text-xs uppercase tracking-wider">
+              FLEET STATUS BREAKDOWN
+            </h3>
+            <span className="text-[10px] text-[#64748B]">STATUS RATIO</span>
+          </div>
+
+          <div className="h-48 w-full flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: 'Active', value: data?.machines.active || 1, color: '#00E676' },
+                    { name: 'Idle', value: data?.machines.idle || 0, color: '#3B82F6' },
+                    { name: 'Maintenance', value: data?.machines.maintenance || 0, color: '#FFB300' },
+                    { name: 'Offline', value: data?.machines.offline || 0, color: '#64748B' },
+                    { name: 'Fault', value: data?.machines.fault || 0, color: '#F43F5E' },
+                  ]}
+                  innerRadius={45}
+                  outerRadius={70}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {[
+                    { name: 'Active', color: '#00E676' },
+                    { name: 'Idle', color: '#3B82F6' },
+                    { name: 'Maintenance', color: '#FFB300' },
+                    { name: 'Offline', color: '#64748B' },
+                    { name: 'Fault', color: '#F43F5E' },
+                  ].map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} stroke="#0B0C12" strokeWidth={2} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#0D0E15', borderColor: '#1E2235', borderRadius: '8px', fontSize: '11px', color: '#fff' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[10px] text-[#94A3B8]">
+            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#00E676]" /> Active ({data?.machines.active || 0})</div>
+            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#3B82F6]" /> Idle ({data?.machines.idle || 0})</div>
+            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#FFB300]" /> Maint ({data?.machines.maintenance || 0})</div>
+            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#F43F5E]" /> Fault ({data?.machines.fault || 0})</div>
+          </div>
         </div>
       </div>
 

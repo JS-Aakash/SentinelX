@@ -97,8 +97,8 @@ export function PredictionHistoryTable({ history = [], total = 0 }: PredictionHi
                 </td>
               </tr>
             ) : (
-              filteredHistory.map((rec) => (
-                <tr key={rec._id} className="border-b border-[#141724] hover:bg-[#121522] transition-colors">
+              filteredHistory.map((rec, index) => (
+                <tr key={rec._id || (rec as any).id || `pred-${rec.timestamp}-${index}`} className="border-b border-[#141724] hover:bg-[#121522] transition-colors">
                   <td className="px-4 py-3 text-white font-mono">{formatDate(rec.timestamp)}</td>
                   <td className="px-4 py-3 font-bold text-[#00F2FE] font-mono">{rec.rsotFormatted}</td>
                   <td className="px-4 py-3 font-mono">

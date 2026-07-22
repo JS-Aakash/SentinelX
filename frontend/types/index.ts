@@ -138,6 +138,24 @@ export interface ActivityItem {
 
 export type MachineStatus = 'active' | 'idle' | 'maintenance' | 'offline' | 'fault';
 
+export type AILifecycleStatus =
+  | 'registered'
+  | 'collecting_data'
+  | 'ready_for_training'
+  | 'training'
+  | 'ai_ready'
+  | 'retraining_recommended';
+
+export type DataSourcePreference = 'upload_historical' | 'collect_live';
+
+export interface LiveDataCollection {
+  collectedSampleCount: number;
+  collectionStartDate?: string | null;
+  lastReadingTimestamp?: string | null;
+  recommendedSamplesThreshold: number;
+  newSamplesSinceLastTraining: number;
+}
+
 export interface MachineOperatingLimits {
   maxTemperature?: number;
   maxVibration?: number;
@@ -161,6 +179,10 @@ export interface Machine {
   department?: string | null;
   location?: string | null;
   status: MachineStatus;
+  aiLifecycleStatus?: AILifecycleStatus;
+  dataSourcePreference?: DataSourcePreference;
+  isRecording?: boolean;
+  liveDataCollection?: LiveDataCollection;
   ratedRPM?: number | null;
   ratedVoltage?: number | null;
   ratedCurrent?: number | null;
@@ -174,6 +196,42 @@ export interface Machine {
   createdBy: { _id: string; name: string; email?: string } | string;
   createdAt: string;
   updatedAt: string;
+}
+
+export type SimulationProfile =
+  | 'normal_operation'
+  | 'bearing_failure'
+  | 'motor_overload'
+  | 'loose_belt'
+  | 'voltage_fluctuation'
+  | 'custom';
+
+export interface SimulationOverride {
+  temperature?: number;
+  vibration?: number;
+  current?: number;
+  voltage?: number;
+  rpm?: number;
+  sound?: number;
+}
+
+export interface SimulationSession {
+  machineId: string;
+  deviceId: string;
+  companyId: string;
+  profile: SimulationProfile;
+  speed: number;
+  isPaused: boolean;
+  stepCount: number;
+  overrides: SimulationOverride;
+  currentValues: {
+    temperature: number;
+    vibration: number;
+    current: number;
+    voltage: number;
+    rpm: number;
+    sound: number;
+  };
 }
 
 export interface MachineStats {

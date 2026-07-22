@@ -118,13 +118,28 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
       if (newPrediction && newPrediction.machineId === machineId) {
         setDashboardData((prev) => {
           if (!prev) return prev;
+          const mergedForecast =
+            newPrediction.forecastTrajectory && newPrediction.forecastTrajectory.length > 0
+              ? newPrediction.forecastTrajectory
+              : prev.latestPrediction?.forecastTrajectory || [];
+
           return {
             ...prev,
-            latestPrediction: newPrediction,
-            recommendations: newPrediction.recommendations || prev.recommendations,
+            latestPrediction: {
+              ...newPrediction,
+              forecastTrajectory: mergedForecast,
+            },
+            recommendations: newPrediction.recommendations?.length ? newPrediction.recommendations : prev.recommendations,
           };
         });
-        setPredLogs((prev) => [newPrediction, ...prev.slice(0, 49)]);
+
+        // Ensure unique _id fallback for socket logs
+        const safePredictionLog = {
+          ...newPrediction,
+          _id: newPrediction._id || newPrediction.id || `socket-pred-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        };
+
+        setPredLogs((prev) => [safePredictionLog, ...prev.slice(0, 49)]);
       }
     });
     return unsubscribe;

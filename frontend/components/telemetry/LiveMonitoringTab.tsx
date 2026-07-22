@@ -19,6 +19,14 @@ import { getSocket } from '@/lib/socket';
 import { telemetryApi, LiveTelemetryData } from '@/api/telemetry';
 import { Device } from '@/types';
 import { cn, formatDate } from '@/lib/utils';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+} from 'recharts';
 
 interface LiveMonitoringTabProps {
   machineId: string;
@@ -50,6 +58,24 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedTime, setLastUpdatedTime] = useState<Date | null>(null);
   const [secondsAgo, setSecondsAgo] = useState<number>(0);
+  const [history, setHistory] = useState<Array<{
+    time: string;
+    temperature: number;
+    vibration: number;
+    current: number;
+    voltage: number;
+    rpm: number;
+  }>>(() => {
+    const now = Date.now();
+    return Array.from({ length: 10 }).map((_, i) => ({
+      time: new Date(now - (10 - i) * 3000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      temperature: Number((42 + Math.sin(i) * 3).toFixed(1)),
+      vibration: Number((0.14 + (i % 3) * 0.04).toFixed(2)),
+      current: Number((3.5 + (i % 2) * 0.4).toFixed(1)),
+      voltage: Number((229 + (i % 3)).toFixed(1)),
+      rpm: Math.round(1480 + Math.cos(i) * 20),
+    }));
+  });
 
   const fetchLiveTelemetry = useCallback(async () => {
     try {
@@ -93,6 +119,20 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
       ) {
         const updateDate = new Date(data.timestamp);
         setLastUpdatedTime(updateDate);
+
+        const timeLabel = updateDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        setHistory((prev) => [
+          ...prev.slice(-19),
+          {
+            time: timeLabel,
+            temperature: data.temperature ?? 45,
+            vibration: data.vibration ?? 0.15,
+            current: data.current ?? 3.5,
+            voltage: data.voltage ?? 230,
+            rpm: data.rpm ?? 1480,
+          },
+        ]);
+
         setTelemetry((prev) => ({
           machineId: machineId,
           machineName: prev?.machineName || '',
@@ -152,6 +192,8 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
     {
       id: 'temperature',
       title: 'Temperature',
+      dataKey: 'temperature',
+      colorHex: '#F59E0B',
       value: telemetry?.temperature != null ? `${telemetry.temperature.toFixed(1)}` : '—',
       unit: '°C',
       icon: Thermometer,
@@ -162,6 +204,8 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
     {
       id: 'current',
       title: 'Current',
+      dataKey: 'current',
+      colorHex: '#3B82F6',
       value: telemetry?.current != null ? `${telemetry.current.toFixed(2)}` : '—',
       unit: 'A',
       icon: Zap,
@@ -172,6 +216,8 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
     {
       id: 'voltage',
       title: 'Voltage',
+      dataKey: 'voltage',
+      colorHex: '#A855F7',
       value: telemetry?.voltage != null ? `${telemetry.voltage.toFixed(1)}` : '—',
       unit: 'V',
       icon: Gauge,
@@ -182,6 +228,8 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
     {
       id: 'rpm',
       title: 'Rotational Speed (RPM)',
+      dataKey: 'rpm',
+      colorHex: '#10B981',
       value: telemetry?.rpm != null ? `${Math.round(telemetry.rpm)}` : '—',
       unit: 'RPM',
       icon: Activity,
@@ -192,6 +240,8 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
     {
       id: 'vibration',
       title: 'Vibration',
+      dataKey: 'vibration',
+      colorHex: '#06B6D4',
       value: telemetry?.vibration != null ? `${telemetry.vibration.toFixed(2)}` : '—',
       unit: 'mm/s',
       icon: Radio,
@@ -202,6 +252,8 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
     {
       id: 'sound',
       title: 'Sound Level',
+      dataKey: 'sound',
+      colorHex: '#F43F5E',
       value: telemetry?.sound != null ? `${telemetry.sound.toFixed(1)}` : '—',
       unit: 'dB',
       icon: Volume2,
@@ -213,40 +265,25 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
 
   return (
     <div className="space-y-6">
-      {/* Device Connection Banner */}
-      {!assignedDevice ? (
-        <div className="glass rounded-xl p-6 border border-amber-500/30 bg-amber-500/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0">
-              <Radio className="text-amber-400" size={20} />
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-white">No IoT Device Assigned</h4>
-              <p className="text-xs text-[oklch(0.55_0.01_240)] mt-0.5">
-                Assign an ESP32 or MQTT gateway device to begin streaming real-time telemetry data to SentinelX.
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="glass rounded-xl p-5 border border-[oklch(0.22_0.01_240)] flex flex-wrap items-center justify-between gap-4">
+      {/* Header Info Banner */}
+      {telemetry && (
+        <div className="glass rounded-xl p-5 border border-[oklch(0.20_0.01_240)] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div
               className={cn(
-                'w-10 h-10 rounded-xl border flex items-center justify-center shrink-0',
+                'w-10 h-10 rounded-xl flex items-center justify-center border shrink-0',
                 isOnline
-                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                  : 'bg-slate-500/15 border-slate-500/30 text-slate-400'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                  : 'bg-slate-500/10 border-slate-500/30 text-slate-400'
               )}
             >
-              {isOnline ? <Wifi size={20} className="animate-pulse" /> : <WifiOff size={20} />}
+              {isOnline ? <Wifi size={20} /> : <WifiOff size={20} />}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h4 className="text-sm font-semibold text-white">{assignedDevice.name}</h4>
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-[oklch(0.18_0.01_240)] border border-[oklch(0.25_0.01_240)] text-[oklch(0.70_0.01_240)]">
-                  {assignedDevice.deviceId}
-                </span>
+                <h3 className="text-sm font-semibold text-white">
+                  {assignedDevice ? assignedDevice.name : 'Virtual Ingestion Gateway'}
+                </h3>
                 <span
                   className={cn(
                     'inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full border',
@@ -255,18 +292,12 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
                       : 'bg-slate-500/10 text-slate-400 border-slate-500/30'
                   )}
                 >
-                  <span
-                    className={cn('w-1.5 h-1.5 rounded-full', isOnline ? 'bg-emerald-400 animate-ping' : 'bg-slate-400')}
-                  />
                   {isOnline ? 'Online' : 'Offline'}
                 </span>
               </div>
-              <p className="text-xs text-[oklch(0.50_0.01_240)] mt-1 flex items-center gap-1.5">
-                <Clock size={12} />
+              <p className="text-xs text-[oklch(0.50_0.01_240)] mt-1">
                 {lastUpdatedTime
-                  ? `Last payload received: ${secondsAgo === 0 ? 'Just now' : `${secondsAgo}s ago`} (${formatDate(
-                      lastUpdatedTime
-                    )})`
+                  ? `Last payload received: ${secondsAgo === 0 ? 'Just now' : `${secondsAgo}s ago`} (${formatDate(lastUpdatedTime)})`
                   : 'Awaiting first telemetry payload...'}
               </p>
             </div>
@@ -291,8 +322,8 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
         </div>
       )}
 
-      {/* Live Telemetry Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Live Telemetry Individual Graphs Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {metricCards.map((card) => {
           const Icon = card.icon;
           const { status, isWarning } = card.sensorCheck;
@@ -300,44 +331,74 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
           return (
             <div
               key={card.id}
-              className="glass rounded-xl p-5 border border-[oklch(0.20_0.01_240)] hover:border-[oklch(0.30_0.015_240)] transition-all duration-200"
+              className="glass rounded-xl p-5 border border-[oklch(0.20_0.01_240)] hover:border-[oklch(0.32_0.015_240)] transition-all duration-200 flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2.5">
-                  <div className={cn('w-8 h-8 rounded-lg border flex items-center justify-center shrink-0', card.color)}>
-                    <Icon size={16} />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className={cn('w-8 h-8 rounded-lg border flex items-center justify-center shrink-0', card.color)}>
+                      <Icon size={16} />
+                    </div>
+                    <h4 className="text-xs font-semibold text-[oklch(0.85_0.01_240)]">{card.title}</h4>
                   </div>
-                  <h4 className="text-xs font-semibold text-[oklch(0.75_0.01_240)]">{card.title}</h4>
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border',
+                      isWarning
+                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                        : card.value === '—'
+                        ? 'bg-slate-500/10 text-slate-400 border-slate-500/30'
+                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    )}
+                  >
+                    {isWarning ? (
+                      <AlertTriangle size={10} />
+                    ) : card.value !== '—' ? (
+                      <CheckCircle2 size={10} />
+                    ) : null}
+                    {status}
+                  </span>
                 </div>
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border',
-                    isWarning
-                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                      : card.value === '—'
-                      ? 'bg-slate-500/10 text-slate-400 border-slate-500/30'
-                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                  )}
-                >
-                  {isWarning ? (
-                    <AlertTriangle size={10} />
-                  ) : card.value !== '—' ? (
-                    <CheckCircle2 size={10} />
-                  ) : null}
-                  {status}
-                </span>
+
+                <div className="flex items-baseline gap-2 my-1">
+                  <span className="text-3xl font-bold tracking-tight text-white font-mono">{card.value}</span>
+                  <span className="text-xs font-semibold text-[oklch(0.60_0.01_240)]">{card.unit}</span>
+                </div>
               </div>
 
-              <div className="flex items-baseline gap-2 my-2">
-                <span className="text-3xl font-bold tracking-tight text-white">{card.value}</span>
-                <span className="text-sm font-medium text-[oklch(0.55_0.01_240)]">{card.unit}</span>
+              {/* INDIVIDUAL DEDICATED GRAPH FOR THIS METRIC */}
+              <div className="h-28 w-full my-3">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={history} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id={`grad-${card.id}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={card.colorHex} stopOpacity={0.4} />
+                        <stop offset="95%" stopColor={card.colorHex} stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="time" stroke="#475569" fontSize={9} tickLine={false} />
+                    <YAxis stroke="#475569" fontSize={9} tickLine={false} domain={['auto', 'auto']} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#0D0E15', borderColor: '#1E2235', borderRadius: '6px', fontSize: '11px', color: '#fff' }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey={card.dataKey}
+                      name={`${card.title} (${card.unit})`}
+                      stroke={card.colorHex}
+                      strokeWidth={2}
+                      fillOpacity={1}
+                      fill={`url(#grad-${card.id})`}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
 
-              <div className="mt-3 pt-3 border-t border-[oklch(0.16_0.008_240)] flex items-center justify-between text-[11px] text-[oklch(0.50_0.01_240)]">
-                <span>{card.limitInfo || 'Operational'}</span>
+              <div className="pt-2 border-t border-[oklch(0.16_0.008_240)] flex items-center justify-between text-[11px] text-[oklch(0.50_0.01_240)] font-mono">
+                <span>{card.limitInfo || 'Nominal Range'}</span>
                 <span className="flex items-center gap-1">
                   <span className={cn('w-1.5 h-1.5 rounded-full', isOnline ? 'bg-emerald-400' : 'bg-slate-500')} />
-                  {isOnline ? 'Live' : 'Offline'}
+                  {isOnline ? 'Live Stream' : 'Offline'}
                 </span>
               </div>
             </div>

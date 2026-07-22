@@ -345,11 +345,13 @@ export class InferenceService {
 
     // Broadcast via Socket.IO
     broadcastAIPrediction(companyId.toString(), machineId.toString(), {
+      _id: predictionDoc._id.toString(),
       machineId: machineId.toString(),
       timestamp: predictionDoc.timestamp,
       modelVersion: activeModel.modelVersion,
       currentReading,
       predictedNext: pyResult.predicted_next,
+      forecastTrajectory: pyResult.forecast_trajectory || [],
       rsotSeconds: pyResult.rsot_seconds,
       rsotFormatted: pyResult.rsot_formatted,
       breachStep: pyResult.breach_step,

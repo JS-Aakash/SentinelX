@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Machine } from '@/types';
 import { MachineStatusBadge } from './MachineStatusBadge';
+import { AILifecycleBadge } from './AILifecycleBadge';
 import { cn, formatDate } from '@/lib/utils';
 import { Cpu, MapPin, Calendar, Tag } from 'lucide-react';
 
@@ -37,6 +38,10 @@ export function MachineCard({ machine, className }: MachineCardProps) {
         {/* Status badge overlay */}
         <div className="absolute top-2.5 right-2.5">
           <MachineStatusBadge status={machine.status} size="sm" />
+        </div>
+        {/* AI Lifecycle badge overlay */}
+        <div className="absolute top-2.5 left-2.5">
+          <AILifecycleBadge status={machine.aiLifecycleStatus} size="sm" />
         </div>
         {/* Type chip */}
         <div className="absolute bottom-2.5 left-2.5">

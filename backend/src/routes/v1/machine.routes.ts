@@ -14,6 +14,11 @@ import {
   updateMachine,
   deleteMachine,
   uploadMachineImage,
+  toggleDataRecording,
+  updateAILifecycleStatus,
+  clearMachineLiveDataset,
+  downloadMachineLiveDataset,
+  trainFromLiveDataset,
 } from '../../controllers/machine.controller';
 import {
   assignDeviceToMachine,
@@ -47,12 +52,17 @@ router.get('/filter-options', getFilterOptions);
 router.get('/:id/live', validate(machineIdParamSchema), getMachineLiveTelemetry);
 router.get('/:id/history', validate(machineIdParamSchema), getMachineTelemetryHistory);
 router.get('/:id/chart', validate(machineIdParamSchema), getChartData);
+router.get('/:id/dataset/download', validate(machineIdParamSchema), downloadMachineLiveDataset);
 router.get('/:id', validate(machineIdParamSchema), getMachineById);
 
 // ─── Write routes (Admin + Engineer) ─────────────────────────────────────────
 
 router.post('/', isEngineer, validate(createMachineSchema), createMachine);
 router.put('/:id', isEngineer, validate(updateMachineSchema), updateMachine);
+router.patch('/:id/recording', isEngineer, validate(machineIdParamSchema), toggleDataRecording);
+router.patch('/:id/ai-lifecycle', isEngineer, validate(machineIdParamSchema), updateAILifecycleStatus);
+router.post('/:id/dataset/clear', isEngineer, validate(machineIdParamSchema), clearMachineLiveDataset);
+router.post('/:id/train-live', isEngineer, validate(machineIdParamSchema), trainFromLiveDataset);
 router.post(
   '/:id/image',
   isEngineer,
@@ -69,3 +79,4 @@ router.delete('/:id/device', isEngineer, removeDeviceFromMachine);
 router.delete('/:id', isCompanyAdmin, validate(machineIdParamSchema), deleteMachine);
 
 export default router;
+

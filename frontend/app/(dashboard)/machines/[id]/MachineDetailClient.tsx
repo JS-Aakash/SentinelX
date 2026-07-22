@@ -30,6 +30,8 @@ import { machinesApi } from '@/api/machines';
 import { devicesApi } from '@/api/devices';
 import { sensorsApi } from '@/api/sensors';
 import { MachineStatusBadge } from '@/components/machines/MachineStatusBadge';
+import { AILifecycleBadge } from '@/components/machines/AILifecycleBadge';
+import { DataCollectionCard } from '@/components/machines/DataCollectionCard';
 import { DeviceStatusBadge } from '@/components/devices/DeviceStatusBadge';
 import { AssignDeviceModal } from '@/components/devices/AssignDeviceModal';
 import { LiveMonitoringTab } from '@/components/telemetry/LiveMonitoringTab';
@@ -194,6 +196,7 @@ export default function MachineDetailClient({ id }: { id: string }) {
 
         <div className="flex items-center gap-2">
           <MachineStatusBadge status={machine.status} size="md" />
+          <AILifecycleBadge status={machine.aiLifecycleStatus} size="md" />
           {canWrite && (
             <Link
               href={`/machines/${id}/edit`}
@@ -304,6 +307,9 @@ export default function MachineDetailClient({ id }: { id: string }) {
           )}
         </div>
       </div>
+
+      {/* ─── Live Data Acquisition & Recording Control Card ──────────────── */}
+      <DataCollectionCard machine={machine} onRefresh={() => fetchMachine(id)} />
 
       {/* ─── Tabs ─────────────────────────────────────────────────────────── */}
       <div className="flex gap-1 bg-[oklch(0.11_0.006_240)] border border-[oklch(0.18_0.009_240)] rounded-xl p-1">

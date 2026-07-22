@@ -9,6 +9,20 @@ export enum MachineStatus {
   FAULT = 'fault',
 }
 
+export enum AILifecycleStatus {
+  REGISTERED = 'registered',
+  COLLECTING_DATA = 'collecting_data',
+  READY_FOR_TRAINING = 'ready_for_training',
+  TRAINING = 'training',
+  AI_READY = 'ai_ready',
+  RETRAINING_RECOMMENDED = 'retraining_recommended',
+}
+
+export enum DataSourcePreference {
+  UPLOAD_HISTORICAL = 'upload_historical',
+  COLLECT_LIVE = 'collect_live',
+}
+
 export const PREDEFINED_MACHINE_TYPES = [
   'AC Motor',
   'DC Motor',
@@ -32,6 +46,14 @@ export interface IOperatingLimits {
   minRPM?: number;
 }
 
+export interface ILiveDataCollection {
+  collectedSampleCount: number;
+  collectionStartDate?: Date;
+  lastReadingTimestamp?: Date;
+  recommendedSamplesThreshold: number;
+  newSamplesSinceLastTraining: number;
+}
+
 export interface IMachine extends Document {
   _id: mongoose.Types.ObjectId;
   uuid: string;
@@ -47,6 +69,10 @@ export interface IMachine extends Document {
   department?: string;
   location?: string;
   status: MachineStatus;
+  aiLifecycleStatus: AILifecycleStatus;
+  dataSourcePreference: DataSourcePreference;
+  isRecording: boolean;
+  liveDataCollection: ILiveDataCollection;
   ratedRPM?: number;
   ratedVoltage?: number;
   ratedCurrent?: number;
@@ -141,6 +167,27 @@ const MachineSchema = new Schema<IMachine>(
       type: String,
       enum: Object.values(MachineStatus),
       default: MachineStatus.IDLE,
+    },
+    aiLifecycleStatus: {
+      type: String,
+      enum: Object.values(AILifecycleStatus),
+      default: AILifecycleStatus.REGISTERED,
+    },
+    dataSourcePreference: {
+      type: String,
+      enum: Object.values(DataSourcePreference),
+      default: DataSourcePreference.COLLECT_LIVE,
+    },
+    isRecording: {
+      type: Boolean,
+      default: false,
+    },
+    liveDataCollection: {
+      collectedSampleCount: { type: Number, default: 0 },
+      collectionStartDate: { type: Date, default: null },
+      lastReadingTimestamp: { type: Date, default: null },
+      recommendedSamplesThreshold: { type: Number, default: 10000 },
+      newSamplesSinceLastTraining: { type: Number, default: 0 },
     },
     ratedRPM: { type: Number, min: 0, default: null },
     ratedVoltage: { type: Number, min: 0, default: null },

@@ -39,7 +39,7 @@ export function AIRecommendationsList({ recommendations = [] }: AIRecommendation
             const badge = SEVERITY_BADGES[rec.severity] || SEVERITY_BADGES['info'];
             return (
               <div
-                key={idx}
+                key={rec.code ? `${rec.code}-${idx}` : `rec-${idx}`}
                 className="rounded-xl border border-[#1E2235] bg-[#12141F] p-4 space-y-2 relative group hover:border-[#2E354F] transition-all"
               >
                 <div className="flex items-center justify-between">

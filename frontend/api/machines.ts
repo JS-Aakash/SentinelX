@@ -54,4 +54,34 @@ export const machinesApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  // Toggle Live Data Recording ON / OFF
+  toggleRecording: (id: string, isRecording: boolean) =>
+    api.patch<ApiResponse<Machine>>(`/machines/${id}/recording`, { isRecording }),
+
+  // Update AI Lifecycle status / Data Source preference
+  updateAILifecycle: (id: string, data: { aiLifecycleStatus?: string; dataSourcePreference?: string }) =>
+    api.patch<ApiResponse<Machine>>(`/machines/${id}/ai-lifecycle`, data),
+
+  // Clear recorded live dataset file
+  clearLiveDataset: (id: string) =>
+    api.post<ApiResponse<Machine>>(`/machines/${id}/dataset/clear`),
+
+  // Download recorded live dataset CSV
+  downloadLiveDataset: async (id: string, filename = 'live_dataset.csv') => {
+    const response = await api.get(`/machines/${id}/dataset/download`, {
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
+
+  // Train AI Model from recorded live dataset
+  trainFromLiveDataset: (id: string) =>
+    api.post<ApiResponse<{ machine: Machine; aiModel: any }>>(`/machines/${id}/train-live`),
 };
