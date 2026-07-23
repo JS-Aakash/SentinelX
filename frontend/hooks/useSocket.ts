@@ -13,10 +13,6 @@ export function useSocket() {
 
   useEffect(() => {
     socketRef.current = getSocket();
-    return () => {
-      disconnectSocket();
-      socketRef.current = null;
-    };
   }, []);
 
   const subscribe = useCallback(<T = unknown>(event: string, callback: (data: T) => void) => {

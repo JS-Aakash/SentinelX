@@ -11,12 +11,19 @@ import {
 
 interface Props {
   status?: AILifecycleStatus;
+  sampleCount?: number;
+  threshold?: number;
   size?: 'sm' | 'md' | 'lg';
 }
 
-export const AILifecycleBadge: React.FC<Props> = ({ status = 'registered', size = 'md' }) => {
+export const AILifecycleBadge: React.FC<Props> = ({ status = 'registered', sampleCount, threshold = 10000, size = 'md' }) => {
+  let effectiveStatus = status;
+  if (effectiveStatus === 'ready_for_training' && sampleCount != null && sampleCount < threshold) {
+    effectiveStatus = 'collecting_data';
+  }
+
   const getBadgeStyle = () => {
-    switch (status) {
+    switch (effectiveStatus) {
       case 'registered':
         return {
           label: 'Registered',
@@ -39,7 +46,7 @@ export const AILifecycleBadge: React.FC<Props> = ({ status = 'registered', size 
         return {
           label: 'Training AI...',
           icon: Loader2,
-          bg: 'bg-purple-500/15 text-purple-400 border-purple-500/40 animate-spin',
+          bg: 'bg-purple-500/15 text-purple-400 border-purple-500/40 font-semibold',
         };
       case 'ai_ready':
         return {

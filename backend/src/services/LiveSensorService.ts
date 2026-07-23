@@ -12,7 +12,9 @@ export interface LiveTelemetryResponse {
   deviceStatus: string;
   lastSeen: Date | string | null;
   temperature: number | null;
+  humidity?: number | null;
   vibration: number | null;
+  acceleration?: { x: number; y: number; z: number } | null;
   current: number | null;
   voltage: number | null;
   rpm: number | null;
@@ -33,7 +35,9 @@ const latestStateCache = new Map<string, {
   companyId?: string | null;
   lastSeen: Date;
   temperature: number;
+  humidity?: number;
   vibration: number;
+  acceleration?: { x: number; y: number; z: number };
   current: number;
   voltage: number;
   rpm: number;
@@ -51,7 +55,9 @@ export class LiveSensorService {
     companyId?: string | null;
     timestamp: Date;
     temperature: number;
+    humidity?: number;
     vibration: number;
+    acceleration?: { x: number; y: number; z: number };
     current: number;
     voltage: number;
     rpm: number;
@@ -64,7 +70,9 @@ export class LiveSensorService {
       companyId: reading.companyId,
       lastSeen: reading.timestamp,
       temperature: reading.temperature,
+      humidity: reading.humidity,
       vibration: reading.vibration,
+      acceleration: reading.acceleration,
       current: reading.current,
       voltage: reading.voltage,
       rpm: reading.rpm,
@@ -123,7 +131,9 @@ export class LiveSensorService {
         deviceStatus: device.status,
         lastSeen: cached.lastSeen,
         temperature: cached.temperature,
+        humidity: cached.humidity ?? 55.0,
         vibration: cached.vibration,
+        acceleration: cached.acceleration ?? { x: 0.02, y: -0.01, z: 1.01 },
         current: cached.current,
         voltage: cached.voltage,
         rpm: cached.rpm,

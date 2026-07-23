@@ -34,7 +34,6 @@ import { SensorCard } from '@/components/monitoring/SensorCard';
 import { SensorChart } from '@/components/monitoring/SensorChart';
 import { HistoryTable } from '@/components/monitoring/HistoryTable';
 import { TimeRangeSelector } from '@/components/monitoring/TimeRangeSelector';
-import { ComingSoonCard } from '@/components/monitoring/ComingSoonCard';
 
 interface TelemetryPayload {
   deviceId: string;
@@ -386,7 +385,7 @@ export default function MonitoringClient({ machineId }: { machineId: string }) {
       {/* ─── Historical Telemetry Audit Table ───────────────────────────── */}
       <HistoryTable data={historyRows} />
 
-      {/* ─── AI Intelligence Suite (Placeholders) ───────────────────────── */}
+      {/* ─── AI Intelligence Suite (Active) ───────────────────────── */}
       <div>
         <div className="flex items-center gap-2 mb-3 font-mono">
           <Sparkles size={14} className="text-[#00F2FE]" />
@@ -395,30 +394,69 @@ export default function MonitoringClient({ machineId }: { machineId: string }) {
           </h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <ComingSoonCard
-            title="Health Index Score"
-            description="Real-time multi-sensor fusion model evaluating mechanical wear and degradation."
-            icon={Brain}
-            color="bg-purple-500/10 text-purple-400 border-purple-500/20"
-          />
-          <ComingSoonCard
-            title="Anomaly Detector"
-            description="Neural network isolating transient vibration spikes and electrical noise."
-            icon={AnomalyIcon}
-            color="bg-amber-500/10 text-amber-400 border-amber-500/20"
-          />
-          <ComingSoonCard
-            title="RUL Estimation"
-            description="Predictive maintenance scheduler calculating Remaining Useful Life."
-            icon={AlertTriangle}
-            color="bg-red-500/10 text-red-400 border-red-500/20"
-          />
-          <ComingSoonCard
-            title="3D Digital Twin"
-            description="Interactive WebGL spatial twin with thermal heatmap mesh overlay."
-            icon={Layers}
-            color="bg-cyan-500/10 text-cyan-400 border-cyan-500/20"
-          />
+          <Link
+            href={`/machines/${machineId}`}
+            className="relative overflow-hidden rounded-xl border border-[oklch(0.17_0.008_240)] bg-[oklch(0.09_0.005_240)] p-5 hover:border-[#00F2FE]/40 transition-colors group block"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 rounded-lg border border-purple-500/20 bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                <Brain size={18} />
+              </div>
+              <span className="px-2 py-0.5 rounded-full bg-[#00E676]/10 border border-[#00E676]/30 text-[9px] font-bold text-[#00E676] uppercase tracking-wider">
+                Active
+              </span>
+            </div>
+            <h3 className="text-sm font-semibold text-white mb-1 group-hover:text-[#00F2FE] transition-colors">Health Index Score</h3>
+            <p className="text-xs text-[oklch(0.40_0.01_240)] leading-relaxed">Real-time multi-sensor fusion model evaluating mechanical wear and degradation.</p>
+          </Link>
+
+          <Link
+            href={`/machines/${machineId}`}
+            className="relative overflow-hidden rounded-xl border border-[oklch(0.17_0.008_240)] bg-[oklch(0.09_0.005_240)] p-5 hover:border-[#00F2FE]/40 transition-colors group block"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                <AnomalyIcon size={18} />
+              </div>
+              <span className="px-2 py-0.5 rounded-full bg-[#00E676]/10 border border-[#00E676]/30 text-[9px] font-bold text-[#00E676] uppercase tracking-wider">
+                Active
+              </span>
+            </div>
+            <h3 className="text-sm font-semibold text-white mb-1 group-hover:text-[#00F2FE] transition-colors">Anomaly Detector</h3>
+            <p className="text-xs text-[oklch(0.40_0.01_240)] leading-relaxed">Neural network isolating transient vibration spikes and electrical noise.</p>
+          </Link>
+
+          <Link
+            href={`/machines/${machineId}`}
+            className="relative overflow-hidden rounded-xl border border-[oklch(0.17_0.008_240)] bg-[oklch(0.09_0.005_240)] p-5 hover:border-[#00F2FE]/40 transition-colors group block"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 flex items-center justify-center">
+                <AlertTriangle size={18} />
+              </div>
+              <span className="px-2 py-0.5 rounded-full bg-[#00E676]/10 border border-[#00E676]/30 text-[9px] font-bold text-[#00E676] uppercase tracking-wider">
+                Active
+              </span>
+            </div>
+            <h3 className="text-sm font-semibold text-white mb-1 group-hover:text-[#00F2FE] transition-colors">RUL Estimation</h3>
+            <p className="text-xs text-[oklch(0.40_0.01_240)] leading-relaxed">Predictive maintenance scheduler calculating Remaining Useful Life.</p>
+          </Link>
+
+          <Link
+            href={`/machines/${machineId}`}
+            className="relative overflow-hidden rounded-xl border border-[oklch(0.17_0.008_240)] bg-[oklch(0.09_0.005_240)] p-5 hover:border-[#00F2FE]/40 transition-colors group block"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
+                <Layers size={18} />
+              </div>
+              <span className="px-2 py-0.5 rounded-full bg-[#00E676]/10 border border-[#00E676]/30 text-[9px] font-bold text-[#00E676] uppercase tracking-wider">
+                Active
+              </span>
+            </div>
+            <h3 className="text-sm font-semibold text-white mb-1 group-hover:text-[#00F2FE] transition-colors">3D Digital Twin</h3>
+            <p className="text-xs text-[oklch(0.40_0.01_240)] leading-relaxed">Interactive WebGL spatial twin with thermal heatmap mesh overlay.</p>
+          </Link>
         </div>
       </div>
     </div>

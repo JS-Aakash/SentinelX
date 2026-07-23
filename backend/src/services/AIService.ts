@@ -8,7 +8,7 @@ import { DatasetService } from './DatasetService';
 import { ApiError } from '../utils/ApiError';
 import { logger } from '../utils/logger';
 
-const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://localhost:8000';
+const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://127.0.0.1:8000';
 
 export class AIService {
   public static TARGET_SENSORS = [
@@ -29,17 +29,19 @@ export class AIService {
       throw ApiError.notFound('Machine not found');
     }
 
-    // 1. Get active dataset for machine
-    let datasetDoc = await Dataset.findOne({ machineId, isActive: true }).exec();
-    if (!datasetDoc) {
-      datasetDoc = await Dataset.findOne({ machineId }).sort({ version: -1 }).exec();
+    // 1. Combine all available historical datasets for machine (multi-period time-gap aware merging)
+    const datasets = await Dataset.find({ machineId }).exec();
+    if (datasets.length === 0) {
+      throw ApiError.badRequest('No historical datasets uploaded for this machine. Upload at least one dataset first.');
     }
 
-    if (!datasetDoc) {
-      throw ApiError.badRequest('No historical dataset uploaded for this machine. Upload a dataset first.');
+    let activeDataset: IDataset;
+    if (datasets.length > 1) {
+      logger.info(`Merging ${datasets.length} multi-period historical datasets for machine ${machineId}...`);
+      activeDataset = await DatasetService.combineMachineDatasets(machineId);
+    } else {
+      activeDataset = datasets[0].engineeredFilePath ? datasets[0] : await DatasetService.engineerFeatures(datasets[0]._id.toString());
     }
-
-    let activeDataset: IDataset = datasetDoc;
 
     // 2. Ensure engineered feature CSV exists
     if (!activeDataset.engineeredFilePath || !fs.existsSync(activeDataset.engineeredFilePath)) {

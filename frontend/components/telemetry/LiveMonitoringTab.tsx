@@ -14,6 +14,8 @@ import {
   Clock,
   AlertTriangle,
   CheckCircle2,
+  Droplets,
+  Cpu,
 } from 'lucide-react';
 import { getSocket } from '@/lib/socket';
 import { telemetryApi, LiveTelemetryData } from '@/api/telemetry';
@@ -44,7 +46,9 @@ interface TelemetryUpdatePayload {
   machineId?: string;
   timestamp: string;
   temperature: number;
+  humidity?: number;
   vibration: number;
+  acceleration?: { x: number; y: number; z: number };
   current: number;
   voltage: number;
   rpm: number;
@@ -65,15 +69,17 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
     current: number;
     voltage: number;
     rpm: number;
+    sound: number;
   }>>(() => {
     const now = Date.now();
     return Array.from({ length: 10 }).map((_, i) => ({
       time: new Date(now - (10 - i) * 3000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      temperature: Number((42 + Math.sin(i) * 3).toFixed(1)),
-      vibration: Number((0.14 + (i % 3) * 0.04).toFixed(2)),
-      current: Number((3.5 + (i % 2) * 0.4).toFixed(1)),
-      voltage: Number((229 + (i % 3)).toFixed(1)),
-      rpm: Math.round(1480 + Math.cos(i) * 20),
+      temperature: 42.0,
+      vibration: 0.14,
+      current: 3.5,
+      voltage: 230.0,
+      rpm: 1480,
+      sound: 58.0,
     }));
   });
 
@@ -130,6 +136,7 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
             current: data.current ?? 3.5,
             voltage: data.voltage ?? 230,
             rpm: data.rpm ?? 1480,
+            sound: data.sound ?? 58,
           },
         ]);
 
@@ -141,7 +148,9 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
           deviceStatus: 'online',
           lastSeen: updateDate.toISOString(),
           temperature: data.temperature,
+          humidity: data.humidity ?? prev?.humidity ?? 58.2,
           vibration: data.vibration,
+          acceleration: data.acceleration ?? prev?.acceleration ?? { x: 0.02, y: -0.01, z: 1.01 },
           current: data.current,
           voltage: data.voltage,
           rpm: data.rpm,
@@ -191,7 +200,7 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
   const metricCards = [
     {
       id: 'temperature',
-      title: 'Temperature',
+      title: 'Temperature (DHT22)',
       dataKey: 'temperature',
       colorHex: '#F59E0B',
       value: telemetry?.temperature != null ? `${telemetry.temperature.toFixed(1)}` : '—',
@@ -203,7 +212,7 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
     },
     {
       id: 'current',
-      title: 'Current',
+      title: 'Current (Kalman ACS712)',
       dataKey: 'current',
       colorHex: '#3B82F6',
       value: telemetry?.current != null ? `${telemetry.current.toFixed(2)}` : '—',
@@ -239,14 +248,18 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
     },
     {
       id: 'vibration',
-      title: 'Vibration',
+      title: 'Vibration (ADXL345 3-Axis)',
       dataKey: 'vibration',
       colorHex: '#06B6D4',
       value: telemetry?.vibration != null ? `${telemetry.vibration.toFixed(2)}` : '—',
-      unit: 'mm/s',
+      unit: 'g',
       icon: Radio,
       color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-      limitInfo: operatingLimits?.maxVibration ? `Max Limit: ${operatingLimits.maxVibration} mm/s` : null,
+      limitInfo: telemetry?.acceleration
+        ? `X: ${telemetry.acceleration.x}g | Y: ${telemetry.acceleration.y}g | Z: ${telemetry.acceleration.z}g`
+        : operatingLimits?.maxVibration
+        ? `Max Limit: ${operatingLimits.maxVibration} g`
+        : 'X: 0.02g | Y: -0.01g | Z: 1.01g',
       sensorCheck: getSensorStatus(telemetry?.vibration ?? null, operatingLimits?.maxVibration),
     },
     {
@@ -255,7 +268,7 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
       dataKey: 'sound',
       colorHex: '#F43F5E',
       value: telemetry?.sound != null ? `${telemetry.sound.toFixed(1)}` : '—',
-      unit: 'dB',
+      unit: 'dB / ADC',
       icon: Volume2,
       color: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
       limitInfo: 'Acoustic Baseline: 60 dB',
@@ -389,6 +402,7 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
                       strokeWidth={2}
                       fillOpacity={1}
                       fill={`url(#grad-${card.id})`}
+                      isAnimationActive={false}
                     />
                   </AreaChart>
                 </ResponsiveContainer>

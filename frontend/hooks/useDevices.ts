@@ -35,7 +35,11 @@ export function useDevices(initialParams?: DevicesQueryParams) {
   });
 
   const fetchDevices = useCallback(async (query: DevicesQueryParams) => {
-    setState((prev) => ({ ...prev, isLoading: true, error: null }));
+    setState((prev) => ({
+      ...prev,
+      isLoading: prev.devices.length === 0,
+      error: null,
+    }));
     try {
       const response = await devicesApi.getAll(query);
       const { data, meta } = response.data;

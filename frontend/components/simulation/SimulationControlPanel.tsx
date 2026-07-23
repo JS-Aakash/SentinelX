@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import {
   ResponsiveContainer,
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
@@ -73,13 +73,19 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
     temperature: number;
     vibration: number;
     current: number;
+    voltage: number;
+    rpm: number;
+    sound: number;
   }>>(() => {
     const now = Date.now();
     return Array.from({ length: 10 }).map((_, i) => ({
       time: new Date(now - (10 - i) * 2000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      temperature: Number((42 + Math.sin(i) * 2).toFixed(1)),
-      vibration: Number((0.14 + (i % 2) * 0.03).toFixed(2)),
-      current: Number((3.4 + (i % 3) * 0.2).toFixed(1)),
+      temperature: 42.0,
+      vibration: 0.14,
+      current: 3.4,
+      voltage: 230.0,
+      rpm: 1480,
+      sound: 58.0,
     }));
   });
 
@@ -103,6 +109,9 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
             temperature: Number(sess.currentValues.temperature.toFixed(1)),
             vibration: Number(sess.currentValues.vibration.toFixed(2)),
             current: Number(sess.currentValues.current.toFixed(1)),
+            voltage: Number((sess.currentValues.voltage ?? 230).toFixed(1)),
+            rpm: Math.round(sess.currentValues.rpm ?? 1480),
+            sound: Number((sess.currentValues.sound ?? 60).toFixed(1)),
           },
         ]);
       } else {
@@ -186,13 +195,38 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
     }
   };
 
-  const handleSensorChange = async (key: keyof typeof sensors, val: number) => {
+  const updateTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const handleSensorChange = (key: keyof typeof sensors, val: number) => {
     const next = { ...sensors, [key]: val };
     setSensors(next);
     setActiveProfile('custom');
-    if (selectedMachineId) {
-      await simulationApi.updateSensors(selectedMachineId, { [key]: val });
+
+    const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setSimHistory((prev) => [
+      ...prev.slice(-19),
+      {
+        time: timeLabel,
+        temperature: Number(next.temperature.toFixed(1)),
+        vibration: Number(next.vibration.toFixed(2)),
+        current: Number(next.current.toFixed(1)),
+        voltage: Number((next.voltage ?? 230).toFixed(1)),
+        rpm: Math.round(next.rpm ?? 1480),
+        sound: Number((next.sound ?? 60).toFixed(1)),
+      },
+    ]);
+
+    if (!selectedMachineId) return;
+
+    if (updateTimerRef.current) {
+      clearTimeout(updateTimerRef.current);
     }
+
+    updateTimerRef.current = setTimeout(() => {
+      simulationApi.updateSensors(selectedMachineId, { [key]: val }).catch(() => {
+        // Silent catch for rapid slider updates
+      });
+    }, 300);
   };
 
   const profilesConfig: Array<{
@@ -202,42 +236,42 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
     icon: any;
     color: string;
   }> = [
-    {
-      id: 'normal_operation',
-      title: 'Normal Operation',
-      description: 'Stable RPM, normal temperature & low vibration',
-      icon: CheckCircle,
-      color: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400',
-    },
-    {
-      id: 'bearing_failure',
-      title: 'Bearing Failure',
-      description: 'Rapid temperature rise, high vibration & noise',
-      icon: Flame,
-      color: 'border-rose-500/40 bg-rose-500/10 text-rose-400',
-    },
-    {
-      id: 'motor_overload',
-      title: 'Motor Overload',
-      description: 'Current spike, high heat & speed drop',
-      icon: Zap,
-      color: 'border-amber-500/40 bg-amber-500/10 text-amber-400',
-    },
-    {
-      id: 'loose_belt',
-      title: 'Loose Belt Slip',
-      description: 'Oscillating RPM, fluctuating current & wobble',
-      icon: RotateCcw,
-      color: 'border-purple-500/40 bg-purple-500/10 text-purple-400',
-    },
-    {
-      id: 'voltage_fluctuation',
-      title: 'Voltage Fluctuation',
-      description: 'Erratic supply voltage with inverse current draw',
-      icon: AlertTriangle,
-      color: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-400',
-    },
-  ];
+      {
+        id: 'normal_operation',
+        title: 'Normal Operation',
+        description: 'Stable RPM, normal temperature & low vibration',
+        icon: CheckCircle,
+        color: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400',
+      },
+      {
+        id: 'bearing_failure',
+        title: 'Bearing Failure',
+        description: 'Rapid temperature rise, high vibration & noise',
+        icon: Flame,
+        color: 'border-rose-500/40 bg-rose-500/10 text-rose-400',
+      },
+      {
+        id: 'motor_overload',
+        title: 'Motor Overload',
+        description: 'Current spike, high heat & speed drop',
+        icon: Zap,
+        color: 'border-amber-500/40 bg-amber-500/10 text-amber-400',
+      },
+      {
+        id: 'loose_belt',
+        title: 'Loose Belt Slip',
+        description: 'Oscillating RPM, fluctuating current & wobble',
+        icon: RotateCcw,
+        color: 'border-purple-500/40 bg-purple-500/10 text-purple-400',
+      },
+      {
+        id: 'voltage_fluctuation',
+        title: 'Voltage Fluctuation',
+        description: 'Erratic supply voltage with inverse current draw',
+        icon: AlertTriangle,
+        color: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-400',
+      },
+    ];
 
   return (
     <div className="space-y-6">
@@ -312,11 +346,10 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
                 key={s}
                 type="button"
                 onClick={() => handleSpeedChange(s)}
-                className={`px-2.5 py-1 rounded-lg font-mono font-bold transition-all ${
-                  speed === s
-                    ? 'bg-[oklch(0.52_0.24_240)] text-white shadow-sm'
-                    : 'text-[oklch(0.60_0.01_240)] hover:text-white'
-                }`}
+                className={`px-2.5 py-1 rounded-lg font-mono font-bold transition-all ${speed === s
+                  ? 'bg-[oklch(0.52_0.24_240)] text-white shadow-sm'
+                  : 'text-[oklch(0.60_0.01_240)] hover:text-white'
+                  }`}
               >
                 {s}×
               </button>
@@ -351,35 +384,68 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
           </div>
         )}
 
-        {/* Live Simulation Output Stream Visualizer */}
-        <div className="glass rounded-xl p-4 border border-[oklch(0.20_0.01_240)] space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sliders size={14} className="text-cyan-400" />
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-                Simulation Telemetry Real-Time Feedback
-              </h4>
-            </div>
-            <div className="flex items-center gap-3 text-[10px] font-mono text-slate-400">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" /> Temp (°C)</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" /> Vib (x100)</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400" /> Cur (A)</span>
-            </div>
+        {/* Live Simulation Output Stream Visualizer (6 Individual Sparklines) */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Sliders size={14} className="text-cyan-400" />
+            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+              Simulation Telemetry Real-Time Feedback
+            </h4>
           </div>
 
-          <div className="h-44 w-full pt-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={simHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <XAxis dataKey="time" stroke="#64748B" fontSize={10} tickLine={false} />
-                <YAxis stroke="#64748B" fontSize={10} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#0D0E15', borderColor: '#1E2235', borderRadius: '8px', fontSize: '11px', color: '#fff' }}
-                />
-                <Line type="monotone" dataKey="temperature" name="Temp (°C)" stroke="#3B82F6" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey={(d) => Math.round(d.vibration * 100)} name="Vib (x100)" stroke="#F59E0B" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="current" name="Current (A)" stroke="#06B6D4" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              { id: 'temp', label: 'Temperature', key: 'temperature', unit: '°C', colorHex: '#F59E0B', icon: Thermometer },
+              { id: 'vib', label: 'Vibration', key: 'vibration', unit: 'm/s²', colorHex: '#F59E0B', icon: Activity },
+              { id: 'cur', label: 'Current', key: 'current', unit: 'A', colorHex: '#EAB308', icon: Zap },
+              { id: 'vol', label: 'Voltage', key: 'voltage', unit: 'V', colorHex: '#06B6D4', icon: Zap },
+              { id: 'rpm', label: 'Speed', key: 'rpm', unit: 'RPM', colorHex: '#10B981', icon: Gauge },
+              { id: 'sound', label: 'Sound Level', key: 'sound', unit: 'dB', colorHex: '#A855F7', icon: Volume2 },
+            ].map((m) => {
+              const Icon = m.icon;
+              const currentVal = sensors[m.key as keyof typeof sensors] ?? 0;
+              return (
+                <div key={m.id} className="glass rounded-xl p-4 border border-[oklch(0.20_0.01_240)] flex flex-col justify-between h-44">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Icon size={14} style={{ color: m.colorHex }} />
+                      <span className="text-xs font-bold text-white uppercase font-mono">{m.label}</span>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-white">
+                      {currentVal.toFixed(m.key === 'rpm' ? 0 : m.key === 'vibration' ? 2 : 1)} {m.unit}
+                    </span>
+                  </div>
+
+                  <div className="h-24 w-full pt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={simHistory} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id={`simGrad-${m.id}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={m.colorHex} stopOpacity={0.3} />
+                            <stop offset="95%" stopColor={m.colorHex} stopOpacity={0.0} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="time" stroke="#475569" fontSize={8} tickLine={false} />
+                        <YAxis stroke="#475569" fontSize={8} tickLine={false} domain={['auto', 'auto']} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#0D0E15', borderColor: '#1E2235', borderRadius: '6px', fontSize: '10px', color: '#fff' }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey={m.key}
+                          name={`${m.label} (${m.unit})`}
+                          stroke={m.colorHex}
+                          strokeWidth={1.5}
+                          fillOpacity={1}
+                          fill={`url(#simGrad-${m.id})`}
+                          isAnimationActive={false}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -399,11 +465,10 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
               <div
                 key={p.id}
                 onClick={() => handleStart(p.id)}
-                className={`p-3.5 rounded-xl border cursor-pointer transition-all duration-300 relative overflow-hidden group hover:scale-[1.02] ${
-                  isSelected
-                    ? `${p.color} ring-2 ring-[oklch(0.52_0.24_240)] shadow-lg`
-                    : 'bg-[oklch(0.12_0.007_240)] border-[oklch(0.18_0.008_240)] hover:border-[oklch(0.30_0.015_240)] text-slate-300'
-                }`}
+                className={`p-3.5 rounded-xl border cursor-pointer transition-all duration-300 relative overflow-hidden group hover:scale-[1.02] ${isSelected
+                  ? `${p.color} ring-2 ring-[oklch(0.52_0.24_240)] shadow-lg`
+                  : 'bg-[oklch(0.12_0.007_240)] border-[oklch(0.18_0.008_240)] hover:border-[oklch(0.30_0.015_240)] text-slate-300'
+                  }`}
               >
                 <div className="flex items-center gap-2 mb-1.5">
                   <Icon size={16} />
@@ -442,7 +507,7 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
             icon={Thermometer}
             value={sensors.temperature}
             min={0}
-            max={120}
+            max={250}
             step={0.5}
             unit="°C"
             color="text-rose-400"
@@ -455,8 +520,8 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
             icon={Activity}
             value={sensors.vibration}
             min={0}
-            max={10}
-            step={0.05}
+            max={50}
+            step={0.1}
             unit="m/s²"
             color="text-amber-400"
             onChange={(val) => handleSensorChange('vibration', val)}
@@ -468,8 +533,8 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
             icon={Zap}
             value={sensors.current}
             min={0}
-            max={30}
-            step={0.1}
+            max={100}
+            step={0.5}
             unit="A"
             color="text-yellow-400"
             onChange={(val) => handleSensorChange('current', val)}
@@ -480,8 +545,8 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
             label="Voltage (V)"
             icon={Zap}
             value={sensors.voltage}
-            min={150}
-            max={300}
+            min={0}
+            max={500}
             step={1}
             unit="V"
             color="text-cyan-400"
@@ -494,7 +559,7 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
             icon={Gauge}
             value={sensors.rpm}
             min={0}
-            max={3000}
+            max={6000}
             step={10}
             unit="RPM"
             color="text-emerald-400"
@@ -506,8 +571,8 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
             label="Sound Level (dB)"
             icon={Volume2}
             value={sensors.sound}
-            min={30}
-            max={120}
+            min={0}
+            max={200}
             step={0.5}
             unit="dB"
             color="text-purple-400"
@@ -544,10 +609,13 @@ const SensorSliderControl: React.FC<SliderProps> = ({
   onChange,
 }) => {
   const [val, setVal] = useState(value);
+  const [isInteracting, setIsInteracting] = useState(false);
 
   useEffect(() => {
-    setVal(value);
-  }, [value]);
+    if (!isInteracting) {
+      setVal(value);
+    }
+  }, [value, isInteracting]);
 
   const handleChange = (newVal: number) => {
     const clamped = Math.max(min, Math.min(max, newVal));
@@ -556,19 +624,19 @@ const SensorSliderControl: React.FC<SliderProps> = ({
   };
 
   return (
-    <div className="bg-[oklch(0.12_0.007_240)] p-4 rounded-xl border border-[oklch(0.17_0.008_240)] space-y-3">
+    <div className="bg-[oklch(0.12_0.007_240)] p-5 rounded-xl border border-[oklch(0.20_0.01_240)] space-y-4 shadow-md">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Icon size={16} className={color} />
-          <span className="text-xs font-semibold text-white">{label}</span>
+        <div className="flex items-center gap-2.5">
+          <Icon size={20} className={color} />
+          <span className="text-sm font-bold text-white tracking-wide">{label}</span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => handleChange(Number((val - step).toFixed(2)))}
-            className="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs"
+            className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center text-sm font-bold transition-all border border-slate-700"
           >
-            <Minus size={10} />
+            <Minus size={14} />
           </button>
           <input
             type="number"
@@ -576,35 +644,41 @@ const SensorSliderControl: React.FC<SliderProps> = ({
             step={step}
             min={min}
             max={max}
+            onFocus={() => setIsInteracting(true)}
+            onBlur={() => setIsInteracting(false)}
             onChange={(e) => handleChange(parseFloat(e.target.value) || min)}
-            className="w-16 bg-slate-900 border border-slate-700 text-white font-mono font-bold text-center text-xs rounded py-0.5 focus:outline-none focus:border-cyan-500"
+            className="w-20 bg-slate-900 border border-slate-700 text-white font-mono font-bold text-center text-sm rounded-lg py-1 focus:outline-none focus:border-cyan-400 shadow-inner"
           />
           <button
             type="button"
             onClick={() => handleChange(Number((val + step).toFixed(2)))}
-            className="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs"
+            className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center text-sm font-bold transition-all border border-slate-700"
           >
-            <Plus size={10} />
+            <Plus size={14} />
           </button>
         </div>
       </div>
 
-      {/* Slider */}
+      {/* Larger Range Slider */}
       <input
         type="range"
         min={min}
         max={max}
         step={step}
         value={val}
+        onMouseDown={() => setIsInteracting(true)}
+        onMouseUp={() => setIsInteracting(false)}
+        onTouchStart={() => setIsInteracting(true)}
+        onTouchEnd={() => setIsInteracting(false)}
         onChange={(e) => handleChange(parseFloat(e.target.value))}
-        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[oklch(0.52_0.24_240)]"
+        className="w-full h-3.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#00F2FE] hover:accent-[#00E676] transition-all"
       />
 
-      <div className="flex justify-between text-[10px] text-[oklch(0.50_0.01_240)] font-mono">
+      <div className="flex justify-between text-xs text-slate-400 font-mono font-medium">
         <span>
           {min} {unit}
         </span>
-        <span className="text-white font-bold">
+        <span className="text-cyan-400 font-bold text-sm">
           {val} {unit}
         </span>
         <span>

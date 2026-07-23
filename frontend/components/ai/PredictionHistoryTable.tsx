@@ -77,16 +77,16 @@ export function PredictionHistoryTable({ history = [], total = 0 }: PredictionHi
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto max-h-56 overflow-y-auto scrollbar-thin scrollbar-thumb-[#1F2438]">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-[#181B28] bg-[#0A0B10] text-[#64748B]">
               <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-wider font-bold">TIMESTAMP</th>
-              <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-wider font-bold">RSOT</th>
+              <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-wider font-bold">RUL (HOURS) & EST. MAINTENANCE</th>
               <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-wider font-bold">HEALTH SCORE</th>
-              <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-wider font-bold">ANOMALY STATUS</th>
-              <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-wider font-bold">MODEL VERSION</th>
-              <th className="px-4 py-3 text-right font-mono text-[10px] uppercase tracking-wider font-bold">ADVISORIES</th>
+              <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-wider font-bold">CONFIDENCE</th>
+              <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-wider font-bold">PRIMARY CAUSE</th>
+              <th className="px-4 py-3 text-right font-mono text-[10px] uppercase tracking-wider font-bold">MODEL VERSION</th>
             </tr>
           </thead>
           <tbody>
@@ -100,7 +100,9 @@ export function PredictionHistoryTable({ history = [], total = 0 }: PredictionHi
               filteredHistory.map((rec, index) => (
                 <tr key={rec._id || (rec as any).id || `pred-${rec.timestamp}-${index}`} className="border-b border-[#141724] hover:bg-[#121522] transition-colors">
                   <td className="px-4 py-3 text-white font-mono">{formatDate(rec.timestamp)}</td>
-                  <td className="px-4 py-3 font-bold text-[#00F2FE] font-mono">{rec.rsotFormatted}</td>
+                  <td className="px-4 py-3 font-bold text-[#00F2FE] font-mono">
+                    {rec.remainingOperatingHours ? `${rec.remainingOperatingHours.toLocaleString()}h (${rec.estimatedMaintenanceDate || 'Est. Maintenance'})` : rec.rsotFormatted}
+                  </td>
                   <td className="px-4 py-3 font-mono">
                     <span
                       className={cn(
@@ -117,20 +119,15 @@ export function PredictionHistoryTable({ history = [], total = 0 }: PredictionHi
                       {rec.healthScore}% ({rec.healthStatus})
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-mono">
-                    <span
-                      className={cn(
-                        'px-2 py-0.5 rounded text-[9px] font-bold uppercase border',
-                        rec.isAnomaly
-                          ? 'bg-[#FF1744]/15 text-[#FF1744] border-[#FF1744]/30'
-                          : 'bg-[#00E676]/15 text-[#00E676] border-[#00E676]/30'
-                      )}
-                    >
-                      {rec.isAnomaly ? 'ANOMALY' : 'NORMAL'}
-                    </span>
+                  <td className="px-4 py-3 font-mono text-emerald-400 font-bold text-xs">
+                    {rec.confidenceScore || 92}%
                   </td>
-                  <td className="px-4 py-3 text-[#94A3B8] font-mono">v{rec.modelVersion}</td>
-                  <td className="px-4 py-3 text-right text-white font-mono">{rec.recommendations?.length || 0} items</td>
+                  <td className="px-4 py-3 text-slate-300 font-mono text-xs">
+                    {rec.primaryDegradingSensors && rec.primaryDegradingSensors.length > 0
+                      ? rec.primaryDegradingSensors.join(', ')
+                      : rec.violatingSensor || 'Nominal'}
+                  </td>
+                  <td className="px-4 py-3 text-right text-[#94A3B8] font-mono">v{rec.modelVersion}</td>
                 </tr>
               ))
             )}

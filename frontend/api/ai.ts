@@ -81,9 +81,18 @@ export interface PredictionRecord {
     sound: number;
   };
   forecastTrajectory: Array<{
-    step: number;
+    step?: number;
+    operatingHours?: number;
+    targetDate?: string;
     predictions: Record<string, number>;
   }>;
+  machineAgeDays?: number;
+  operatingHours?: number;
+  remainingOperatingHours?: number | null;
+  estimatedMaintenanceDate?: string | null;
+  estimatedFailureWindow?: string | null;
+  confidenceScore?: number;
+  primaryDegradingSensors?: string[];
   rsotSeconds?: number | null;
   rsotFormatted: string;
   breachStep?: number | null;

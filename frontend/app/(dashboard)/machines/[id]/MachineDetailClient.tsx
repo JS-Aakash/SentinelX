@@ -42,13 +42,11 @@ import { cn, formatDate } from '@/lib/utils';
 import { Device, Sensor } from '@/types';
 
 const TABS = [
-  'Overview',
   'Live Monitoring',
   'Historical Data',
   'AI Model',
-  'Specifications',
-  'Operating Limits',
-  'Details',
+  'Overview',
+  'Specifications & Limits',
 ] as const;
 type Tab = typeof TABS[number];
 
@@ -85,7 +83,7 @@ export default function MachineDetailClient({ id }: { id: string }) {
   const router = useRouter();
   const { user } = useAuthStore();
   const { machine, isLoading, error, fetchMachine, deleteMachine, uploadImage } = useMachine();
-  const [activeTab, setActiveTab] = useState<Tab>('Overview');
+  const [activeTab, setActiveTab] = useState<Tab>('Live Monitoring');
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
@@ -120,7 +118,8 @@ export default function MachineDetailClient({ id }: { id: string }) {
   useEffect(() => {
     fetchMachine(id);
     fetchMachineDevice();
-  }, [fetchMachine, fetchMachineDevice, id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const handleUnassignDevice = async () => {
     setUnassigning(true);
@@ -154,7 +153,7 @@ export default function MachineDetailClient({ id }: { id: string }) {
     setImageUploading(false);
   };
 
-  if (isLoading) {
+  if (isLoading && !machine) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 size={28} className="animate-spin text-[oklch(0.45_0.01_240)]" />
@@ -343,27 +342,13 @@ export default function MachineDetailClient({ id }: { id: string }) {
       )}
 
       {activeTab === 'Overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-fade-in">
-          {/* Specs summary */}
-          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <InfoCard icon={Zap} color="bg-amber-500/15 text-amber-400 border-amber-500/30" title="Electrical">
-              <SpecRow label="Rated Voltage" value={machine.ratedVoltage} unit="V" />
-              <SpecRow label="Rated Current" value={machine.ratedCurrent} unit="A" />
-              <SpecRow label="Rated Power" value={machine.ratedPower} unit="kW" />
-              {!machine.ratedVoltage && !machine.ratedCurrent && !machine.ratedPower && (
-                <p className="text-xs text-[oklch(0.40_0.01_240)] py-2">No electrical specs recorded</p>
-              )}
-            </InfoCard>
-            <InfoCard icon={Gauge} color="bg-[oklch(0.52_0.24_240/0.15)] text-[oklch(0.62_0.20_240)] border-[oklch(0.52_0.24_240/0.3)]" title="Mechanical">
-              <SpecRow label="Rated RPM" value={machine.ratedRPM} unit="RPM" />
-              <SpecRow label="Rated Temperature" value={machine.ratedTemperature} unit="°C" />
-              {!machine.ratedRPM && !machine.ratedTemperature && (
-                <p className="text-xs text-[oklch(0.40_0.01_240)] py-2">No mechanical specs recorded</p>
-              )}
-            </InfoCard>
+        <div className="space-y-5 animate-fade-in">
+          {/* Data Collection & Model Training Overview */}
+          <DataCollectionCard machine={machine} onRefresh={() => fetchMachine(id)} />
 
-            {/* Assigned IoT Device & Sensors */}
-            <div className="glass rounded-xl p-5 border-[oklch(0.22_0.01_240)] col-span-1 sm:col-span-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* Assigned IoT Device & Hardware Details */}
+            <div className="glass rounded-xl p-5 border-[oklch(0.22_0.01_240)]">
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg border bg-[oklch(0.52_0.24_240/0.15)] border-[oklch(0.52_0.24_240/0.3)] flex items-center justify-center text-[oklch(0.75_0.18_200)]">
@@ -536,58 +521,41 @@ export default function MachineDetailClient({ id }: { id: string }) {
         </div>
       )}
 
-      {activeTab === 'Specifications' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fade-in">
-          <InfoCard icon={Zap} color="bg-amber-500/15 text-amber-400 border-amber-500/30" title="Electrical Specs">
+      {activeTab === 'Specifications & Limits' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in font-mono">
+          <InfoCard icon={Zap} color="bg-amber-500/15 text-amber-400 border-amber-500/30" title="Electrical & Acoustic Specs">
             <SpecRow label="Rated Voltage" value={machine.ratedVoltage} unit="V" />
             <SpecRow label="Rated Current" value={machine.ratedCurrent} unit="A" />
-            <SpecRow label="Rated Power" value={machine.ratedPower} unit="kW" />
-            {!machine.ratedVoltage && !machine.ratedCurrent && !machine.ratedPower && (
-              <p className="text-xs text-[oklch(0.40_0.01_240)] py-3 text-center">No electrical specs recorded</p>
-            )}
+            <SpecRow label="Rated Sound Level" value={machine.ratedSound || 65} unit="dB" />
+            <SpecRow label="Rated Vibration" value={machine.ratedVibration || 1.2} unit="mm/s" />
           </InfoCard>
-          <InfoCard icon={Gauge} color="bg-[oklch(0.52_0.24_240/0.15)] text-[oklch(0.62_0.20_240)] border-[oklch(0.52_0.24_240/0.3)]" title="Mechanical Specs">
+
+          <InfoCard icon={Gauge} color="bg-[#38BDF8]/15 text-[#38BDF8] border-[#38BDF8]/30" title="Mechanical Specs">
             <SpecRow label="Rated RPM" value={machine.ratedRPM} unit="RPM" />
             <SpecRow label="Rated Temperature" value={machine.ratedTemperature} unit="°C" />
-            {!machine.ratedRPM && !machine.ratedTemperature && (
-              <p className="text-xs text-[oklch(0.40_0.01_240)] py-3 text-center">No mechanical specs recorded</p>
-            )}
           </InfoCard>
-          <InfoCard icon={Info} color="bg-[oklch(0.62_0.20_240/0.15)] text-[oklch(0.62_0.20_240)] border-[oklch(0.62_0.20_240/0.3)]" title="Identity">
-            <SpecRow label="Manufacturer" value={machine.manufacturer} />
+
+          <InfoCard icon={AlertTriangle} color="bg-rose-500/15 text-rose-400 border-rose-500/30" title="Operating Safety Thresholds">
+            <SpecRow label="Max Temperature" value={machine.operatingLimits?.maxTemperature || 80} unit="°C" />
+            <SpecRow label="Max Vibration" value={machine.operatingLimits?.maxVibration || 2.5} unit="mm/s" />
+            <SpecRow label="Max Current" value={machine.operatingLimits?.maxCurrent || 15} unit="A" />
+            <SpecRow label="Min RPM" value={machine.operatingLimits?.minRPM || 1000} unit="RPM" />
+          </InfoCard>
+
+          <InfoCard icon={Info} color="bg-purple-500/15 text-purple-400 border-purple-500/30" title="Machine Identity">
+            <SpecRow label="UUID" value={machine.uuid ? machine.uuid.slice(0, 8) + '...' : undefined} />
+            <SpecRow label="Code" value={machine.machineCode} />
+            <SpecRow label="Manufacturer" value={machine.manufacturer || 'Industrial Supply Corp'} />
             <SpecRow label="Model Number" value={machine.modelNumber} />
             <SpecRow label="Serial Number" value={machine.serialNumber} />
             <SpecRow label="Manufacturing Year" value={machine.manufacturingYear} />
           </InfoCard>
-          <InfoCard icon={Calendar} color="bg-emerald-500/15 text-emerald-400 border-emerald-500/30" title="Lifecycle">
-            <SpecRow label="Installation Date" value={machine.installationDate ? formatDate(machine.installationDate) : undefined} />
-            <SpecRow label="Created" value={formatDate(machine.createdAt)} />
-            <SpecRow label="Last Updated" value={formatDate(machine.updatedAt)} />
-          </InfoCard>
-        </div>
-      )}
 
-      {activeTab === 'Operating Limits' && (
-        <div className="animate-fade-in">
-          <InfoCard icon={AlertTriangle} color="bg-red-500/15 text-red-400 border-red-500/30" title="Alert Thresholds">
-            {machine.operatingLimits?.maxTemperature || machine.operatingLimits?.maxVibration || machine.operatingLimits?.maxCurrent || machine.operatingLimits?.minRPM ? (
-              <>
-                <SpecRow label="Max Temperature" value={machine.operatingLimits?.maxTemperature} unit="°C" />
-                <SpecRow label="Max Vibration" value={machine.operatingLimits?.maxVibration} unit="mm/s" />
-                <SpecRow label="Max Current" value={machine.operatingLimits?.maxCurrent} unit="A" />
-                <SpecRow label="Min RPM" value={machine.operatingLimits?.minRPM} unit="RPM" />
-              </>
-            ) : (
-              <div className="flex flex-col items-center gap-2 py-8 text-center">
-                <AlertTriangle size={28} className="text-[oklch(0.35_0.01_240)]" />
-                <p className="text-sm text-[oklch(0.50_0.01_240)]">No operating limits configured</p>
-                {canWrite && (
-                  <Link href={`/machines/${id}/edit`} className="text-xs text-[oklch(0.62_0.20_240)] hover:underline mt-1">
-                    Add limits →
-                  </Link>
-                )}
-              </div>
-            )}
+          <InfoCard icon={Calendar} color="bg-[#34D399]/15 text-[#34D399] border-[#34D399]/30" title="Lifecycle Audit">
+            <SpecRow label="Installation Date" value={machine.installationDate ? formatDate(machine.installationDate) : undefined} />
+            <SpecRow label="Commissioning Date" value={machine.commissioningDate ? formatDate(machine.commissioningDate) : undefined} />
+            <SpecRow label="Created Date" value={formatDate(machine.createdAt)} />
+            <SpecRow label="Last Updated" value={formatDate(machine.updatedAt)} />
           </InfoCard>
         </div>
       )}
@@ -599,35 +567,6 @@ export default function MachineDetailClient({ id }: { id: string }) {
             assignedDevice={assignedDevice}
             operatingLimits={machine.operatingLimits}
           />
-        </div>
-      )}
-
-      {activeTab === 'Details' && (
-        <div className="animate-fade-in space-y-4">
-          {machine.description && (
-            <InfoCard icon={Info} color="bg-[oklch(0.62_0.20_240/0.15)] text-[oklch(0.62_0.20_240)] border-[oklch(0.62_0.20_240/0.3)]" title="Description">
-              <p className="text-sm text-[oklch(0.60_0.01_240)] leading-relaxed">{machine.description}</p>
-            </InfoCard>
-          )}
-          <InfoCard icon={MapPin} color="bg-[oklch(0.75_0.18_200/0.15)] text-[oklch(0.75_0.18_200)] border-[oklch(0.75_0.18_200/0.3)]" title="Location">
-            <SpecRow label="Plant" value={machine.plant} />
-            <SpecRow label="Department" value={machine.department} />
-            <SpecRow label="Location" value={machine.location} />
-            {!machine.plant && !machine.department && !machine.location && (
-              <p className="text-xs text-[oklch(0.40_0.01_240)] py-2">No location information</p>
-            )}
-          </InfoCard>
-          {machine.tags?.length > 0 && (
-            <InfoCard icon={Tag} color="bg-[oklch(0.62_0.20_240/0.15)] text-[oklch(0.62_0.20_240)] border-[oklch(0.62_0.20_240/0.3)]" title="Tags">
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {machine.tags.map((tag) => (
-                  <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-[oklch(0.52_0.24_240/0.12)] border border-[oklch(0.52_0.24_240/0.25)] text-[oklch(0.62_0.20_240)] text-xs px-2.5 py-1">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </InfoCard>
-          )}
         </div>
       )}
 

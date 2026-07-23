@@ -35,7 +35,11 @@ export function useMachines(initialParams?: MachinesQueryParams) {
   });
 
   const fetchMachines = useCallback(async (query: MachinesQueryParams) => {
-    setState((prev) => ({ ...prev, isLoading: true, error: null }));
+    setState((prev) => ({
+      ...prev,
+      isLoading: prev.machines.length === 0,
+      error: null,
+    }));
     try {
       const response = await machinesApi.getAll(query);
       const { data, meta } = response.data;

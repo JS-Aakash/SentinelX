@@ -34,9 +34,18 @@ export interface IPredictionHistory extends Document {
     sound: number;
   };
   forecastTrajectory: Array<{
-    step: number;
+    step?: number;
+    operatingHours?: number;
+    targetDate?: string;
     predictions: Record<string, number>;
   }>;
+  machineAgeDays?: number;
+  operatingHours?: number;
+  remainingOperatingHours?: number | null;
+  estimatedMaintenanceDate?: string | null;
+  estimatedFailureWindow?: string | null;
+  confidenceScore?: number;
+  primaryDegradingSensors?: string[];
   rsotSeconds?: number | null;
   rsotFormatted: string;
   breachStep?: number | null;
@@ -85,11 +94,20 @@ const PredictionHistorySchema = new Schema<IPredictionHistory>(
     forecastTrajectory: [
       {
         step: { type: Number },
+        operatingHours: { type: Number },
+        targetDate: { type: String },
         predictions: { type: Schema.Types.Mixed },
       },
     ],
+    machineAgeDays: { type: Number, default: 0 },
+    operatingHours: { type: Number, default: 0 },
+    remainingOperatingHours: { type: Number, default: null },
+    estimatedMaintenanceDate: { type: String, default: null },
+    estimatedFailureWindow: { type: String, default: null },
+    confidenceScore: { type: Number, default: 95 },
+    primaryDegradingSensors: { type: [String], default: [] },
     rsotSeconds: { type: Number, default: null },
-    rsotFormatted: { type: String, default: 'Safe (> 100 steps)' },
+    rsotFormatted: { type: String, default: 'Safe' },
     breachStep: { type: Number, default: null },
     violatingSensor: { type: String, default: null },
     healthScore: { type: Number, required: true, default: 100 },

@@ -30,7 +30,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
     const restoreSession = async () => {
       // 1. If valid auth state exists in localStorage, immediately validate and render
-      if (isAuthenticated && accessToken && user && company) {
+      const state = useAuthStore.getState();
+      if (state.isAuthenticated && state.accessToken && state.user && state.company) {
         if (isMounted) setIsRestoring(false);
         return;
       }
@@ -41,7 +42,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         const newToken = refreshRes.data?.data?.accessToken;
 
         if (newToken) {
-          setAccessToken(newToken);
+          useAuthStore.getState().setAccessToken(newToken);
 
           // Fetch user profile and company info
           const [userRes, companyRes] = await Promise.all([
@@ -53,7 +54,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           const c = companyRes.data?.data;
 
           if (u && c && isMounted) {
-            setAuth(u, c, newToken);
+            useAuthStore.getState().setAuth(u, c, newToken);
             setIsRestoring(false);
             return;
           }
@@ -65,7 +66,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       if (isMounted) {
         setIsRestoring(false);
         if (!useAuthStore.getState().isAuthenticated) {
-          logout();
+          useAuthStore.getState().logout();
           router.replace('/login');
         }
       }
@@ -76,7 +77,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return () => {
       isMounted = false;
     };
-  }, [hasHydrated, isAuthenticated, accessToken, user, company, setAuth, setAccessToken, logout, router]);
+  }, [hasHydrated, router]);
 
   if (!hasHydrated || isRestoring) {
     return (

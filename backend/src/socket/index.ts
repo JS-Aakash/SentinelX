@@ -67,7 +67,9 @@ export function broadcastSensorUpdate(data: {
   companyId?: string | null;
   timestamp: string | Date;
   temperature: number;
+  humidity?: number;
   vibration: number;
+  acceleration?: { x: number; y: number; z: number };
   current: number;
   voltage: number;
   rpm: number;

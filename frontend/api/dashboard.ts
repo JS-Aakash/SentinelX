@@ -19,6 +19,7 @@ export interface DashboardOverview {
   todaySensorRecords: number;
   averageTemperature: number | null;
   averagePowerConsumption: number | null;
+  averageHealthIndex?: number;
   machineFleet: MachineFleetItem[];
 }
 

@@ -35,8 +35,13 @@ app.use(morganMiddleware);
 // ─── Rate Limiting ──────────────────────────────────────────────────────────
 app.use(globalRateLimiter);
 
-// ─── Static Files (Uploads) ─────────────────────────────────────────────────
-app.use('/uploads', express.static(path.join(process.cwd(), env.UPLOAD_DIR)));
+// Sanitizes double slashes in incoming request URLs (e.g. /api/v1//telemetry/ingest -> /api/v1/telemetry/ingest)
+app.use((req, _res, next) => {
+  if (req.url.includes('//')) {
+    req.url = req.url.replace(/\/+/g, '/');
+  }
+  next();
+});
 
 // ─── API Routes ─────────────────────────────────────────────────────────────
 app.use('/api/v1', v1Routes);
@@ -91,12 +96,37 @@ const startServer = async (): Promise<void> => {
     DeviceStatusMonitor.start();
 
     const PORT = Number(env.PORT) || 5000;
-    httpServer.listen(PORT, () => {
-      logger.info(`🚀 SentinelX Server running on port ${PORT}`);
-      logger.info(`🌍 Environment: ${env.NODE_ENV}`);
-      logger.info(`📡 API Base: http://localhost:${PORT}/api/v1`);
-      logger.info(`🔌 Socket.IO Server active on port ${PORT}`);
-    });
+
+    if (!httpServer.listening) {
+      httpServer.on('error', (err: any) => {
+        if (err.code === 'EADDRINUSE') {
+          logger.warn(`⚠️ Port ${PORT} is temporarily busy. Automatically releasing port ${PORT}...`);
+          try {
+            const { execSync } = require('child_process');
+            if (process.platform === 'win32') {
+              execSync(`npx kill-port ${PORT}`, { stdio: 'ignore' });
+            } else {
+              execSync(`fuser -k ${PORT}/tcp`, { stdio: 'ignore' });
+            }
+          } catch {}
+          setTimeout(() => {
+            if (!httpServer.listening) {
+              try { httpServer.close(); } catch {}
+              httpServer.listen(PORT);
+            }
+          }, 1000);
+        } else {
+          logger.error('❌ Server error:', err);
+        }
+      });
+
+      httpServer.listen(PORT, () => {
+        logger.info(`🚀 SentinelX Server running on port ${PORT}`);
+        logger.info(`🌍 Environment: ${env.NODE_ENV}`);
+        logger.info(`📡 API Base: http://localhost:${PORT}/api/v1`);
+        logger.info(`🔌 Socket.IO Server active on port ${PORT}`);
+      });
+    }
 
     // Graceful shutdown
     const shutdown = (signal: string) => {
@@ -110,9 +140,14 @@ const startServer = async (): Promise<void> => {
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
+    process.once('SIGUSR2', () => {
+      DeviceStatusMonitor.stop();
+      httpServer.close(() => {
+        process.kill(process.pid, 'SIGUSR2');
+      });
+    });
   } catch (error) {
-    logger.error('Failed to start server:', error);
-    process.exit(1);
+    logger.error('❌ Failed to start server:', error);
   }
 };
 

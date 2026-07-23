@@ -43,6 +43,8 @@ export const createMachineSchema = z.object({
     ratedCurrent: z.number().positive('Rated current must be positive').optional(),
     ratedTemperature: z.number().positive('Rated temperature must be positive').optional(),
     ratedPower: z.number().positive('Rated power must be positive').optional(),
+    ratedSound: z.number().positive('Rated sound must be positive').optional(),
+    ratedVibration: z.number().positive('Rated vibration must be positive').optional(),
     operatingLimits: z
       .object({
         maxTemperature: z.number().nonnegative().optional(),

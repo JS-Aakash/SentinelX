@@ -44,6 +44,9 @@ export interface IOperatingLimits {
   maxVibration?: number;
   maxCurrent?: number;
   minRPM?: number;
+  failureTemperature?: number;
+  failureVibration?: number;
+  failureCurrent?: number;
 }
 
 export interface ILiveDataCollection {
@@ -65,6 +68,9 @@ export interface IMachine extends Document {
   serialNumber?: string;
   manufacturingYear?: number;
   installationDate?: Date;
+  commissioningDate?: Date;
+  lastMaintenanceDate?: Date;
+  lastMajorOverhaulDate?: Date;
   plant?: string;
   department?: string;
   location?: string;
@@ -78,6 +84,8 @@ export interface IMachine extends Document {
   ratedCurrent?: number;
   ratedTemperature?: number;
   ratedPower?: number;
+  ratedSound?: number;
+  ratedVibration?: number;
   operatingLimits?: IOperatingLimits;
   description?: string;
   image?: string;
@@ -94,6 +102,9 @@ const OperatingLimitsSchema = new Schema<IOperatingLimits>(
     maxVibration: { type: Number, min: 0 },
     maxCurrent: { type: Number, min: 0 },
     minRPM: { type: Number, min: 0 },
+    failureTemperature: { type: Number, min: 0 },
+    failureVibration: { type: Number, min: 0 },
+    failureCurrent: { type: Number, min: 0 },
   },
   { _id: false }
 );
@@ -148,6 +159,18 @@ const MachineSchema = new Schema<IMachine>(
       type: Date,
       default: null,
     },
+    commissioningDate: {
+      type: Date,
+      default: null,
+    },
+    lastMaintenanceDate: {
+      type: Date,
+      default: null,
+    },
+    lastMajorOverhaulDate: {
+      type: Date,
+      default: null,
+    },
     plant: {
       type: String,
       trim: true,
@@ -194,6 +217,8 @@ const MachineSchema = new Schema<IMachine>(
     ratedCurrent: { type: Number, min: 0, default: null },
     ratedTemperature: { type: Number, min: 0, default: null },
     ratedPower: { type: Number, min: 0, default: null },
+    ratedSound: { type: Number, min: 0, default: null },
+    ratedVibration: { type: Number, min: 0, default: null },
     operatingLimits: {
       type: OperatingLimitsSchema,
       default: {},

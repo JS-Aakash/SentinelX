@@ -9,7 +9,9 @@ export interface LiveTelemetryData {
   deviceStatus: 'online' | 'offline' | 'maintenance' | string;
   lastSeen: string | null;
   temperature: number | null;
+  humidity?: number | null;
   vibration: number | null;
+  acceleration?: { x: number; y: number; z: number } | null;
   current: number | null;
   voltage: number | null;
   rpm: number | null;
@@ -22,7 +24,9 @@ export interface TelemetryReading {
   deviceId: string;
   machineId: string;
   temperature: number | null;
+  humidity?: number | null;
   vibration: number | null;
+  acceleration?: { x: number; y: number; z: number } | null;
   current: number | null;
   voltage: number | null;
   rpm: number | null;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Machine } from '@/types';
 import { machinesApi } from '@/api/machines';
 import { AILifecycleBadge } from './AILifecycleBadge';
@@ -24,6 +24,14 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
   const [clearing, setClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
+  useEffect(() => {
+    if (!machine.isRecording) return;
+    const interval = setInterval(() => {
+      if (onRefresh) onRefresh();
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [machine.isRecording, onRefresh]);
+
   const stats = machine.liveDataCollection || {
     collectedSampleCount: 0,
     recommendedSamplesThreshold: 10000,
@@ -34,7 +42,7 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
   const threshold = stats.recommendedSamplesThreshold || 10000;
   const progressPct = Math.min(100, Math.round((sampleCount / threshold) * 100));
 
-  const isReadyForTraining = sampleCount >= threshold || machine.aiLifecycleStatus === 'ready_for_training';
+  const isReadyForTraining = sampleCount >= threshold;
   const isRetrainingRecommended = machine.aiLifecycleStatus === 'retraining_recommended';
 
   const handleTrainModel = async () => {
@@ -76,23 +84,38 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
   };
 
   return (
-    <div className="glass rounded-2xl p-5 border border-[oklch(0.20_0.01_240)] space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-[oklch(0.18_0.008_240)]">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-lg bg-[oklch(0.52_0.24_240/0.15)] text-[oklch(0.62_0.20_240)]">
-            <Database size={18} />
+    <div className="rounded-3xl border border-[#1B1E2E] bg-[#0A0B12] p-6 font-mono space-y-5 shadow-2xl relative overflow-hidden">
+      {/* Background Glow */}
+      <div className="absolute top-0 right-0 w-80 h-80 bg-[#38BDF8]/5 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Header Ribbon */}
+      <div className="flex items-center justify-between flex-wrap gap-4 pb-4 border-b border-[#181B28] relative z-10">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-[#38BDF8]/10 border border-[#38BDF8]/30 flex items-center justify-center text-[#38BDF8] shrink-0">
+            <Database size={20} />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white">Live Data Acquisition & Training</h3>
-            <p className="text-[11px] text-[oklch(0.55_0.01_240)]">
-              Sensor data collection and AI pipeline status
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-extrabold text-white uppercase tracking-wider font-mono">
+                {machine.name}
+              </h3>
+              <span className="text-[11px] font-mono text-[#38BDF8] bg-[#38BDF8]/10 px-2 py-0.5 rounded-md border border-[#38BDF8]/20">
+                {machine.machineCode}
+              </span>
+            </div>
+            <p className="text-[11px] text-[#64748B] mt-0.5">
+              Live Telemetry Acquisition & AI Model Lifecycle
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <AILifecycleBadge status={machine.aiLifecycleStatus} size="md" />
+          <AILifecycleBadge
+            status={machine.aiLifecycleStatus}
+            sampleCount={sampleCount}
+            threshold={threshold}
+            size="md"
+          />
           <RecordingToggle
             machineId={machine._id || machine.id}
             initialRecording={machine.isRecording}
@@ -102,103 +125,112 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
       </div>
 
       {/* Dataset Progress Section */}
-      <div className="space-y-2.5 bg-[oklch(0.12_0.007_240)] p-4 rounded-xl border border-[oklch(0.17_0.008_240)]">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-[oklch(0.60_0.01_240)] font-medium">Dataset Collection Samples</span>
-          <span className="font-mono text-white font-bold">
+      <div className="space-y-3 bg-[#0E101B] p-5 rounded-2xl border border-[#1C2034] relative z-10">
+        <div className="flex items-center justify-between text-xs font-mono">
+          <span className="text-[#94A3B8] font-bold uppercase tracking-wider text-[11px]">
+            DATASET COLLECTION PROGRESS
+          </span>
+          <span className="text-white font-extrabold">
             {sampleCount.toLocaleString()} / {threshold.toLocaleString()}{' '}
-            <span className="text-[oklch(0.52_0.24_240)]">({progressPct}%)</span>
+            <span className="text-[#38BDF8]">({progressPct}%)</span>
           </span>
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full h-2.5 bg-[oklch(0.18_0.008_240)] rounded-full overflow-hidden p-0.5">
+        <div className="w-full h-3 bg-[#161929] rounded-full overflow-hidden p-0.5 border border-[#232940]">
           <div
-            className={`h-full rounded-full transition-all duration-500 ${
+            className={`h-full rounded-full transition-all duration-500 shadow-[0_0_15px_rgba(56,189,248,0.5)] ${
               progressPct >= 100
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
-                : 'bg-gradient-to-r from-[oklch(0.52_0.24_240)] to-cyan-400'
+                ? 'bg-gradient-to-r from-[#34D399] to-[#059669]'
+                : 'bg-gradient-to-r from-[#38BDF8] via-[#3B82F6] to-[#6366F1]'
             }`}
-            style={{ width: `${progressPct}%` }}
+            style={{ width: `${Math.max(2, progressPct)}%` }}
           />
         </div>
 
-        {/* Readiness Message */}
-        {isReadyForTraining && (
-          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs mt-2">
-            <CheckCircle2 size={15} className="shrink-0" />
-            <span>Sufficient data available for training. You can train the AI model now.</span>
+        {/* Readiness Notification Box */}
+        {isReadyForTraining ? (
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#34D399]/10 border border-[#34D399]/30 text-[#34D399] text-xs font-mono">
+            <CheckCircle2 size={16} className="shrink-0 text-[#34D399]" />
+            <span>Sufficient data available for training ({sampleCount.toLocaleString()} samples). You can train the production AI model now.</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#38BDF8]/10 border border-[#38BDF8]/30 text-[#38BDF8] text-xs font-mono">
+            <Clock size={16} className="shrink-0 text-[#38BDF8] animate-pulse" />
+            <span>Collecting telemetry data: <strong>{sampleCount.toLocaleString()} / {threshold.toLocaleString()}</strong> samples recorded. Minimum {threshold.toLocaleString()} samples required for production training.</span>
           </div>
         )}
 
         {isRetrainingRecommended && (
-          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs mt-2">
-            <AlertCircle size={15} className="shrink-0" />
-            <span>New sensor data available ({stats.newSamplesSinceLastTraining} samples). Retraining recommended.</span>
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-mono">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>New sensor data available ({stats.newSamplesSinceLastTraining} samples). Model retraining recommended.</span>
           </div>
         )}
       </div>
 
-      {/* Metadata Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-        <div className="bg-[oklch(0.12_0.007_240)] p-3 rounded-lg border border-[oklch(0.16_0.008_240)]">
-          <span className="text-[oklch(0.50_0.01_240)] text-[10px] block">Start Date</span>
-          <span className="text-white font-medium text-[11px] block mt-0.5">
+      {/* Metadata Grid (4 Clean Cards) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono relative z-10">
+        <div className="bg-[#0E101B] p-3.5 rounded-2xl border border-[#1C2034]">
+          <span className="text-[#64748B] text-[10px] uppercase font-bold tracking-wider block">Start Date</span>
+          <span className="text-white font-extrabold text-xs block mt-1">
             {formatDate(stats.collectionStartDate)}
           </span>
         </div>
-        <div className="bg-[oklch(0.12_0.007_240)] p-3 rounded-lg border border-[oklch(0.16_0.008_240)]">
-          <span className="text-[oklch(0.50_0.01_240)] text-[10px] block">Last Data Received</span>
-          <span className="text-white font-medium text-[11px] block mt-0.5">
+        <div className="bg-[#0E101B] p-3.5 rounded-2xl border border-[#1C2034]">
+          <span className="text-[#64748B] text-[10px] uppercase font-bold tracking-wider block">Last Data Received</span>
+          <span className="text-white font-extrabold text-xs block mt-1">
             {formatDate(stats.lastReadingTimestamp)}
           </span>
         </div>
-        <div className="bg-[oklch(0.12_0.007_240)] p-3 rounded-lg border border-[oklch(0.16_0.008_240)]">
-          <span className="text-[oklch(0.50_0.01_240)] text-[10px] block">Estimated Size</span>
-          <span className="text-white font-mono font-medium text-[11px] block mt-0.5">
+        <div className="bg-[#0E101B] p-3.5 rounded-2xl border border-[#1C2034]">
+          <span className="text-[#64748B] text-[10px] uppercase font-bold tracking-wider block">Estimated Size</span>
+          <span className="text-[#38BDF8] font-extrabold text-xs block mt-1">
             ~{((sampleCount * 120) / 1024).toFixed(1)} KB
           </span>
         </div>
-        <div className="bg-[oklch(0.12_0.007_240)] p-3 rounded-lg border border-[oklch(0.16_0.008_240)]">
-          <span className="text-[oklch(0.50_0.01_240)] text-[10px] block">New Samples</span>
-          <span className="text-white font-mono font-medium text-[11px] block mt-0.5">
+        <div className="bg-[#0E101B] p-3.5 rounded-2xl border border-[#1C2034]">
+          <span className="text-[#64748B] text-[10px] uppercase font-bold tracking-wider block">New Samples</span>
+          <span className="text-[#34D399] font-extrabold text-xs block mt-1">
             {stats.newSamplesSinceLastTraining || 0}
           </span>
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex items-center justify-between gap-3 pt-2 flex-wrap">
-        <div className="flex items-center gap-2">
+      {/* Action Buttons Ribbon */}
+      <div className="flex items-center justify-between gap-3 pt-1 flex-wrap relative z-10 font-mono">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={handleTrainModel}
-            disabled={training || sampleCount < 5}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white transition-all shadow-md ${
+            disabled={training || (!isReadyForTraining && !isRetrainingRecommended)}
+            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold text-white transition-all shadow-lg active:scale-95 ${
               isReadyForTraining || isRetrainingRecommended
-                ? 'bg-gradient-to-r from-[oklch(0.52_0.24_240)] to-blue-600 hover:from-[oklch(0.58_0.26_240)] hover:to-blue-500'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                ? 'bg-gradient-to-r from-[#38BDF8] via-[#3B82F6] to-[#6366F1] hover:from-[#60A5FA] hover:to-[#4F46E5] shadow-[0_0_20px_rgba(56,189,248,0.3)] cursor-pointer'
+                : 'bg-[#141828] border border-[#232940] text-[#64748B] cursor-not-allowed opacity-75'
             } ${training ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {training ? (
-              <Loader2 size={14} className="animate-spin" />
+              <Loader2 size={14} className="animate-spin text-[#38BDF8]" />
             ) : (
-              <BrainCircuit size={14} />
+              <BrainCircuit size={14} className={isReadyForTraining ? 'text-white' : 'text-[#64748B]'} />
             )}
             {training
-              ? 'Training AI...'
+              ? 'Training AI Model...'
               : isRetrainingRecommended
               ? 'Retrain Model'
-              : 'Train AI Model'}
+              : isReadyForTraining
+              ? 'Train AI Model'
+              : `Collecting Data (${sampleCount.toLocaleString()} / ${threshold.toLocaleString()})`}
           </button>
 
           {sampleCount > 0 && (
             <button
               type="button"
               onClick={handleDownloadCSV}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs border border-[oklch(0.24_0.01_240)] bg-[oklch(0.14_0.007_240)] hover:bg-[oklch(0.18_0.008_240)] text-slate-300 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-bold border border-[#2B3350] bg-[#141828] hover:bg-[#1A2035] text-[#38BDF8] transition-all active:scale-95 shadow-sm"
             >
-              <Download size={13} />
+              <Download size={14} />
               CSV
             </button>
           )}
@@ -208,9 +240,9 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
           <button
             type="button"
             onClick={() => setShowClearConfirm(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-bold border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-all active:scale-95 shadow-sm"
           >
-            <Trash2 size={13} />
+            <Trash2 size={14} />
             Clear Dataset
           </button>
         )}

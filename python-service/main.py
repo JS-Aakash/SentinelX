@@ -14,8 +14,8 @@ except ImportError:
 
 app = FastAPI(
     title="SentinelX AI Model Service",
-    description="Python FastAPI service for per-machine AI model training, recursive forecasting, RSOT estimation, and anomaly detection",
-    version="2.1.0",
+    description="Python FastAPI service for per-machine AI model training, time-aware maintenance forecasting, remaining operating life estimation, and anomaly detection",
+    version="3.0.0",
 )
 
 # CORS Middleware
@@ -52,12 +52,12 @@ def read_root():
     return {
         "service": "SentinelX AI Model Service",
         "status": "healthy",
-        "version": "2.1.0",
+        "version": "3.0.0",
         "features": [
             "6 Independent XGBoost Regressors per machine",
             "Isolation Forest Anomaly Detection",
-            "100-step Recursive Forecasting",
-            "RSOT Estimation",
+            "Time-Aware Remaining Operating Life (RUL) Forecasting",
+            "Estimated Maintenance Date & Failure Window Calculation",
             "In-Memory Model Caching"
         ]
     }

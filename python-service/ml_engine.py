@@ -104,12 +104,48 @@ def train_machine_models(
     
     models_created.append(f"IsolationForest (Anomaly Detection) -> {iso_filename}")
     
-    # 3. Save Feature Names Metadata
+    # 3. Calculate Machine Baseline Statistics & Historical Degradation Slopes
+    sensor_baselines: Dict[str, Dict[str, float]] = {}
+    historical_degradation_slopes: Dict[str, float] = {}
+
+    total_rows = len(df)
+    total_hours = float(df["operating_hours"].iloc[-1] - df["operating_hours"].iloc[0]) if "operating_hours" in df.columns and len(df) > 1 else max(1.0, total_rows * (5.0 / 3600.0))
+
+    for sensor in TARGET_SENSORS:
+        col = sensor if sensor in df.columns else next((c for c in df.columns if c.lower() == sensor.lower()), None)
+        if col:
+            s_vals = df[col].dropna()
+            mean_val = round(float(s_vals.mean()), 2)
+            std_val = round(float(s_vals.std()), 3)
+
+            # Linear degradation slope over total operating hours
+            if len(s_vals) > 10 and total_hours > 0:
+                first_window_mean = float(s_vals.iloc[:max(5, int(len(s_vals) * 0.1))].mean())
+                last_window_mean = float(s_vals.iloc[-max(5, int(len(s_vals) * 0.1)):].mean())
+                deg_slope_per_hour = round((last_window_mean - first_window_mean) / max(1.0, total_hours), 5)
+            else:
+                deg_slope_per_hour = 0.0
+
+            sensor_baselines[sensor] = {
+                "expected": mean_val,
+                "std": std_val,
+                "q05": round(float(s_vals.quantile(0.05)), 2),
+                "q95": round(float(s_vals.quantile(0.95)), 2),
+                "min": round(float(s_vals.min()), 2),
+                "max": round(float(s_vals.max()), 2),
+                "degradation_slope_per_hour": deg_slope_per_hour,
+            }
+            historical_degradation_slopes[sensor] = deg_slope_per_hour
+
+    # 4. Save Feature Names & Machine Baseline Metadata
     metadata = {
         "machine_id": machine_id,
         "model_version": model_version,
         "feature_cols": feature_cols,
         "target_sensors": TARGET_SENSORS,
+        "sensor_baselines": sensor_baselines,
+        "historical_degradation_slopes": historical_degradation_slopes,
+        "total_operating_hours": round(total_hours, 2),
         "total_rows_trained": len(X_train),
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     }
@@ -130,5 +166,7 @@ def train_machine_models(
         "elapsed_time_seconds": elapsed_time,
         "models_created": models_created,
         "feature_cols": feature_cols,
-        "target_sensors": TARGET_SENSORS
+        "target_sensors": TARGET_SENSORS,
+        "sensor_baselines": sensor_baselines,
+        "historical_degradation_slopes": historical_degradation_slopes,
     }

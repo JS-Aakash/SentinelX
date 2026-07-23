@@ -161,6 +161,9 @@ export interface MachineOperatingLimits {
   maxVibration?: number;
   maxCurrent?: number;
   minRPM?: number;
+  failureTemperature?: number;
+  failureVibration?: number;
+  failureCurrent?: number;
 }
 
 export interface Machine {
@@ -175,6 +178,9 @@ export interface Machine {
   serialNumber?: string | null;
   manufacturingYear?: number | null;
   installationDate?: string | null;
+  commissioningDate?: string | null;
+  lastMaintenanceDate?: string | null;
+  lastMajorOverhaulDate?: string | null;
   plant?: string | null;
   department?: string | null;
   location?: string | null;
@@ -188,6 +194,8 @@ export interface Machine {
   ratedCurrent?: number | null;
   ratedTemperature?: number | null;
   ratedPower?: number | null;
+  ratedSound?: number | null;
+  ratedVibration?: number | null;
   operatingLimits?: MachineOperatingLimits;
   description?: string | null;
   image?: string | null;
@@ -252,6 +260,8 @@ export interface CreateMachinePayload {
   serialNumber?: string;
   manufacturingYear?: number;
   installationDate?: string;
+  commissioningDate?: string;
+  lastMaintenanceDate?: string;
   plant?: string;
   department?: string;
   location?: string;

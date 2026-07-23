@@ -4,16 +4,20 @@ import React, { useEffect } from 'react';
 import { useMachines } from '@/hooks/useMachines';
 import { DataCollectionCard } from '@/components/machines/DataCollectionCard';
 import { Database, Radio, BrainCircuit, CheckCircle2, RefreshCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function DataCollectionClient() {
   const { machines, isLoading, refresh } = useMachines({ limit: 100 });
 
   useEffect(() => {
+    const isAnyRecording = machines.some((m) => m.isRecording);
+    if (!isAnyRecording) return;
+
     const interval = setInterval(() => {
       refresh();
-    }, 4000);
+    }, 5000);
     return () => clearInterval(interval);
-  }, [refresh]);
+  }, [refresh, machines]);
 
   // Aggregate stats
   const totalMachines = machines.length;
@@ -109,7 +113,7 @@ export default function DataCollectionClient() {
       </div>
 
       {/* Machine Data Collection Cards */}
-      {isLoading ? (
+      {isLoading && machines.length === 0 ? (
         <div className="glass rounded-2xl p-12 text-center text-slate-400 animate-pulse">
           Loading data collection status...
         </div>
@@ -119,10 +123,12 @@ export default function DataCollectionClient() {
         </div>
       ) : (
         <div className="space-y-4">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <RefreshCw size={16} className="text-[oklch(0.62_0.20_240)] animate-spin-slow" />
-            Machine Acquisition Cards
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <RefreshCw size={16} className={cn("text-[oklch(0.62_0.20_240)]", isLoading && "animate-spin")} />
+              Machine Acquisition Cards
+            </h2>
+          </div>
           {machines.map((m) => (
             <DataCollectionCard key={m._id || m.id} machine={m} onRefresh={refresh} />
           ))}

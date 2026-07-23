@@ -28,11 +28,13 @@ import {
   Bell,
 } from 'lucide-react';
 import { aiApi, AIModelItem, AIModelStatusResponse, PredictionRecord, AIDashboardResponse } from '@/api/ai';
+import { anomalyApi, AnomalyEventRecord } from '@/api/anomaly';
 import { HealthScoreCard } from './HealthScoreCard';
 import { RSOTCard } from './RSOTCard';
 import { LivePredictionsGrid } from './LivePredictionsGrid';
 import { ForecastCharts } from './ForecastCharts';
-import { AnomalyPanel } from './AnomalyPanel';
+import { AnomalyDetectionPanel } from './AnomalyDetectionPanel';
+import { AnomalyHistoryTable } from './AnomalyHistoryTable';
 import { AIRecommendationsList } from './AIRecommendationsList';
 import { PredictionHistoryTable } from './PredictionHistoryTable';
 import { useSocket } from '@/hooks/useSocket';
@@ -56,12 +58,12 @@ const TRAINING_STEPS = [
 ];
 
 const MODEL_CARDS = [
-  { target: 'Temperature', icon: Thermometer, color: 'border-[#FFB300]/30 text-[#FFB300] bg-[#FFB300]/10', algo: 'XGBRegressor', desc: 'Predicts 1-step-ahead Temperature[t+1] using all sensor features' },
-  { target: 'Vibration', icon: Radio, color: 'border-[#00F2FE]/30 text-[#00F2FE] bg-[#00F2FE]/10', algo: 'XGBRegressor', desc: 'Predicts 1-step-ahead Vibration[t+1] using all sensor features' },
-  { target: 'Current', icon: Zap, color: 'border-[#2979FF]/30 text-[#2979FF] bg-[#2979FF]/10', algo: 'XGBRegressor', desc: 'Predicts 1-step-ahead Current[t+1] using all sensor features' },
-  { target: 'Voltage', icon: Gauge, color: 'border-[#9D4EDD]/30 text-[#9D4EDD] bg-[#9D4EDD]/10', algo: 'XGBRegressor', desc: 'Predicts 1-step-ahead Voltage[t+1] using all sensor features' },
-  { target: 'RPM', icon: Activity, color: 'border-[#00E676]/30 text-[#00E676] bg-[#00E676]/10', algo: 'XGBRegressor', desc: 'Predicts 1-step-ahead RPM[t+1] using all sensor features' },
-  { target: 'Sound', icon: Volume2, color: 'border-[#FF1744]/30 text-[#FF1744] bg-[#FF1744]/10', algo: 'XGBRegressor', desc: 'Predicts 1-step-ahead Sound[t+1] using all sensor features' },
+  { target: 'Temperature', icon: Thermometer, color: 'border-[#FFB300]/30 text-[#FFB300] bg-[#FFB300]/10', algo: 'XGBRegressor', desc: 'Time-Aware Degradation Trend & RUL Model for Temperature' },
+  { target: 'Vibration', icon: Radio, color: 'border-[#00F2FE]/30 text-[#00F2FE] bg-[#00F2FE]/10', algo: 'XGBRegressor', desc: 'Time-Aware Degradation Trend & RUL Model for Vibration' },
+  { target: 'Current', icon: Zap, color: 'border-[#2979FF]/30 text-[#2979FF] bg-[#2979FF]/10', algo: 'XGBRegressor', desc: 'Time-Aware Degradation Trend & RUL Model for Current' },
+  { target: 'Voltage', icon: Gauge, color: 'border-[#9D4EDD]/30 text-[#9D4EDD] bg-[#9D4EDD]/10', algo: 'XGBRegressor', desc: 'Time-Aware Degradation Trend & RUL Model for Voltage' },
+  { target: 'RPM', icon: Activity, color: 'border-[#00E676]/30 text-[#00E676] bg-[#00E676]/10', algo: 'XGBRegressor', desc: 'Time-Aware Degradation Trend & RUL Model for RPM' },
+  { target: 'Sound', icon: Volume2, color: 'border-[#FF1744]/30 text-[#FF1744] bg-[#FF1744]/10', algo: 'XGBRegressor', desc: 'Time-Aware Degradation Trend & RUL Model for Sound' },
   { target: 'Anomaly Detector', icon: ShieldCheck, color: 'border-[#3B82F6]/30 text-[#3B82F6] bg-[#3B82F6]/10', algo: 'IsolationForest', desc: 'Detects structural sensor anomalies & out-of-distribution patterns' },
 ];
 
@@ -80,6 +82,20 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
   const [trainingLogs, setTrainingLogs] = useState<string[]>([]);
   const [predicting, setPredicting] = useState(false);
 
+  // Live Anomaly Event State
+  const [activeAnomalyEvent, setActiveAnomalyEvent] = useState<AnomalyEventRecord | null>(null);
+
+  const loadAnomalyStatus = useCallback(async () => {
+    try {
+      const res = await anomalyApi.getLiveStatus(machineId);
+      if (res.data.success) {
+        setActiveAnomalyEvent(res.data.data.activeEvent);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, [machineId]);
+
   // Load Dashboard Aggregated Data
   const loadDashboardData = useCallback(async () => {
     try {
@@ -88,6 +104,7 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
         aiApi.getDashboard(machineId),
         aiApi.getHistory(machineId),
         aiApi.getPredictionHistory(machineId, { limit: 50 }),
+        loadAnomalyStatus(),
       ]);
 
       if (dbRes.data.success && dbRes.data.data) {
@@ -142,15 +159,39 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
         setPredLogs((prev) => [safePredictionLog, ...prev.slice(0, 49)]);
       }
     });
-    return unsubscribe;
-  }, [subscribe, machineId]);
+    
+    const unsubscribeAnomaly = subscribe<any>('anomaly:event', (data) => {
+      if (data && data.machineId === machineId) {
+        loadAnomalyStatus();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeAnomaly();
+    };
+  }, [subscribe, machineId, loadAnomalyStatus]);
 
   // Execute Live Manual Inference Trigger
   const handleRunInference = async () => {
     try {
       setPredicting(true);
       const res = await aiApi.triggerPredict(machineId);
-      if (res.data.success) {
+      if (res.data.success && res.data.data) {
+        const pred = res.data.data;
+        setDashboardData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            latestPrediction: {
+              ...prev.latestPrediction,
+              ...pred,
+              machineAgeDays: pred.machineAgeDays || prev.latestPrediction?.machineAgeDays || 185,
+              operatingHours: pred.operatingHours || prev.latestPrediction?.operatingHours || 1776,
+              forecastTrajectory: pred.forecastTrajectory?.length ? pred.forecastTrajectory : prev.latestPrediction?.forecastTrajectory || [],
+            },
+          };
+        });
         loadDashboardData();
       }
     } catch (err: any) {
@@ -182,6 +223,9 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
 
       if (res.data.success) {
         await new Promise((resolve) => setTimeout(resolve, 800));
+        try {
+          await aiApi.triggerPredict(machineId);
+        } catch {}
         loadDashboardData();
       }
     } catch (err: any) {
@@ -236,7 +280,7 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-white tracking-tight uppercase">
-                {isTrained ? 'INDUSTRIAL AI FORECAST & RSOT DASHBOARD' : 'PER-MACHINE AI MODEL SUITE'}
+                {isTrained ? 'INDUSTRIAL AI FORECAST & MAINTENANCE ENGINE' : 'PER-MACHINE AI MODEL SUITE'}
               </h2>
               <span
                 className={cn(
@@ -249,14 +293,14 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
                 {isTrained ? `READY (v${activeModel.modelVersion})` : 'NOT TRAINED'}
               </span>
             </div>
-            <p className="text-[11px] text-[#94A3B8] mt-0.5">
-              Multi-Sensor XGBoost Regressors · 100-Step Recursive Forecast · RSOT Estimator · Isolation Forest
+            <p className="text-xs text-[#94A3B8] font-sans mt-0.5">
+              Time-Aware RUL Forecasting & Degraded Lifecycle Maintenance Engine
             </p>
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2">
+        {/* View Mode Toggle & Primary CTA Buttons */}
+        <div className="flex items-center gap-3">
           {isTrained && (
             <div className="inline-flex items-center gap-1 bg-[#12141F] border border-[#1E202E] p-1 rounded-lg">
               <button
@@ -281,14 +325,25 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
           )}
 
           {isTrained ? (
-            <button
-              onClick={handleRunInference}
-              disabled={predicting}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#00E676] to-[#00B0FF] hover:from-[#00E676] hover:to-[#00F2FE] text-black font-bold text-xs px-4 py-2.5 transition-all shadow-[0_0_20px_rgba(0,230,118,0.3)]"
-            >
-              <Play size={14} className={cn(predicting && 'animate-spin')} />
-              {predicting ? 'RUNNING INFERENCE...' : 'RUN LIVE INFERENCE'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleStartTraining(true)}
+                disabled={isTraining}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#141724] border border-[#3B82F6]/50 hover:bg-[#1C2033] text-[#60A5FA] font-bold text-xs px-3.5 py-2.5 transition-all shadow"
+              >
+                <Sparkles size={14} className={cn(isTraining && 'animate-spin')} />
+                {isTraining ? 'RETRAINING...' : 'RETRAIN MODEL'}
+              </button>
+
+              <button
+                onClick={handleRunInference}
+                disabled={predicting}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#00E676] to-[#00B0FF] hover:from-[#00E676] hover:to-[#00F2FE] text-black font-bold text-xs px-4 py-2.5 transition-all shadow-[0_0_20px_rgba(0,230,118,0.3)]"
+              >
+                <Play size={14} className={cn(predicting && 'animate-spin')} />
+                {predicting ? 'RUNNING INFERENCE...' : 'RUN LIVE INFERENCE'}
+              </button>
+            </div>
           ) : (
             <button
               onClick={() => handleStartTraining(false)}
@@ -334,7 +389,7 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
       {isTrained && viewMode === 'dashboard' && (
         <div className="space-y-6 animate-fade-in">
           {/* Top Metric Cards: Health Score + RSOT */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
             <HealthScoreCard
               score={latestPrediction?.healthScore || 100}
               status={latestPrediction?.healthStatus || 'Excellent'}
@@ -343,10 +398,15 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
             />
 
             <RSOTCard
-              rsotSeconds={latestPrediction?.rsotSeconds}
-              rsotFormatted={latestPrediction?.rsotFormatted || 'Safe (> 100 steps)'}
+              machineAgeDays={latestPrediction?.machineAgeDays}
+              operatingHours={latestPrediction?.operatingHours}
+              remainingOperatingHours={latestPrediction?.remainingOperatingHours}
+              estimatedMaintenanceDate={latestPrediction?.estimatedMaintenanceDate}
+              estimatedFailureWindow={latestPrediction?.estimatedFailureWindow}
+              confidenceScore={latestPrediction?.confidenceScore}
+              primaryDegradingSensors={latestPrediction?.primaryDegradingSensors}
+              rsotFormatted={latestPrediction?.rsotFormatted}
               violatingSensor={latestPrediction?.violatingSensor}
-              breachStep={latestPrediction?.breachStep}
               timestamp={latestPrediction?.timestamp}
             />
           </div>
@@ -368,17 +428,23 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
 
           {/* Anomaly Panel & AI Recommendations Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-1">
-              <AnomalyPanel
-                isAnomaly={latestPrediction?.isAnomaly}
-                anomalyScore={latestPrediction?.anomalyScore}
+            <div className="lg:col-span-2">
+              <AnomalyDetectionPanel
+                machineId={machineId}
+                activeEvent={activeAnomalyEvent}
+                latestAnomalyScore={latestPrediction?.anomalyScore}
+                latestIsAnomaly={latestPrediction?.isAnomaly}
+                onRefresh={loadAnomalyStatus}
               />
             </div>
 
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-1">
               <AIRecommendationsList recommendations={dashboardData?.recommendations || []} />
             </div>
           </div>
+
+          {/* Anomaly Event Audit History */}
+          <AnomalyHistoryTable machineId={machineId} />
 
           {/* Prediction History Matrix & Export */}
           <PredictionHistoryTable history={predLogs} />

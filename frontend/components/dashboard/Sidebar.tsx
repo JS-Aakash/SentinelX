@@ -172,9 +172,6 @@ export function Sidebar() {
                         />
                         <span>{item.label}</span>
                       </div>
-                      <span className="text-[10px] font-mono text-[#475569] group-hover:text-[#64748B] transition-colors">
-                        {item.shortcut}
-                      </span>
                     </Link>
                   )}
                 </li>
@@ -182,35 +179,12 @@ export function Sidebar() {
             })}
           </ul>
         </div>
-
-        {/* System telemetry status sidebar widget */}
-        <div className="pt-2">
-          <p className="px-3 mb-2 text-[9px] font-mono font-bold uppercase tracking-widest text-[#475569]">
-            ENGINE ENGINE STATUS
-          </p>
-          <div className="mx-1 rounded-lg bg-[#0F111A] border border-[#1B1E2B] p-3 space-y-2">
-            <div className="flex items-center justify-between text-[10px] font-mono">
-              <span className="text-[#64748B]">MQTT Ingestion</span>
-              <span className="text-[#00E676] font-semibold">ACTIVE</span>
-            </div>
-            <div className="w-full bg-[#181B28] h-1.5 rounded-full overflow-hidden">
-              <div className="bg-gradient-to-r from-[#3B82F6] to-[#00F2FE] h-full w-full animate-pulse" />
-            </div>
-            <div className="flex items-center justify-between text-[9px] font-mono text-[#475569]">
-              <span>TimescaleDB Storage</span>
-              <span>100% Sync</span>
-            </div>
-          </div>
-        </div>
       </nav>
 
-      {/* ─── Footer Metadata ─────────────────────────────────────────── */}
-      <div className="px-5 py-3 border-t border-[#1B1D2A] shrink-0 flex items-center justify-between text-[10px] font-mono text-[#475569]">
-        <span className="flex items-center gap-1.5">
-          <Layers size={12} className="text-[#3B82F6]" />
-          v5.2.0-PROD
-        </span>
-        <span className="text-[#00E676]">99.98%</span>
+      {/* ─── Footer Brand ─────────────────────────────────────────── */}
+      <div className="px-5 py-4 border-t border-[#1B1D2A] shrink-0 flex items-center gap-2 text-[11px] font-mono text-[#64748B]">
+        <Layers size={13} className="text-[#3B82F6]" />
+        <span>SentinelX Platform</span>
       </div>
     </aside>
   );

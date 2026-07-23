@@ -11,6 +11,8 @@ import datasetRoutes from './dataset.routes';
 import aiRoutes from './ai.routes';
 import simulationRoutes from './simulation.routes';
 import maintenanceRoutes from './maintenance.routes';
+import anomalyRoutes from './anomaly.routes';
+import telemetryRoutes from './telemetry.routes';
 
 const router = Router();
 
@@ -25,6 +27,8 @@ router.use('/datasets', datasetRoutes);
 router.use('/ai', aiRoutes);
 router.use('/simulation', simulationRoutes);
 router.use('/maintenance', maintenanceRoutes);
+router.use('/anomalies', anomalyRoutes);
+router.use('/telemetry', telemetryRoutes);
 
 // Health check
 router.get('/health', (_req, res) => {
@@ -32,8 +36,8 @@ router.get('/health', (_req, res) => {
     success: true,
     message: 'SentinelX API is running',
     timestamp: new Date().toISOString(),
-    version: '8.1.0',
-    modules: ['auth', 'company', 'users', 'machines', 'devices', 'sensors', 'dashboard', 'datasets', 'ai', 'simulation', 'maintenance'],
+    version: '8.2.0',
+    modules: ['auth', 'company', 'users', 'machines', 'devices', 'sensors', 'dashboard', 'datasets', 'ai', 'simulation', 'maintenance', 'anomalies'],
   });
 });
 

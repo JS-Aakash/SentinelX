@@ -32,25 +32,15 @@ export function Navbar() {
 
   return (
     <header className="fixed top-0 left-64 right-0 h-16 bg-[#0A0B10]/90 backdrop-blur-md border-b border-[#1B1D2A] z-30 flex items-center justify-between px-6 select-none">
-      {/* ─── Left: Search & Telemetry Heartbeat ───────────────────────── */}
+      {/* ─── Left: Search Input ───────────────────────── */}
       <div className="flex items-center gap-6">
         <div className="relative flex items-center">
           <Search className="absolute left-3 text-[#475569]" size={14} />
           <input
             type="text"
             placeholder="Search machines, devices, telemetry..."
-            className="w-72 h-9 rounded-lg bg-[#11131C] border border-[#1E202E] pl-9 pr-8 text-xs text-white placeholder-[#475569] focus:outline-none focus:border-[#3B82F6] focus:ring-1 focus:ring-[#3B82F6] transition-all font-mono"
+            className="w-72 h-9 rounded-lg bg-[#11131C] border border-[#1E202E] pl-9 pr-3 text-xs text-white placeholder-[#475569] focus:outline-none focus:border-[#3B82F6] focus:ring-1 focus:ring-[#3B82F6] transition-all font-mono"
           />
-          <kbd className="absolute right-2.5 px-1.5 py-0.5 rounded bg-[#181B28] border border-[#262A3E] text-[9px] font-mono text-[#64748B]">
-            ⌘K
-          </kbd>
-        </div>
-
-        <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#11131C] border border-[#1E202E]">
-          <span className="w-2 h-2 rounded-full bg-[#00E676] animate-live-dot" />
-          <span className="text-[11px] font-mono text-[#94A3B8]">
-            Broker: <strong className="text-white font-semibold">Mosquitto / HiveMQ</strong>
-          </span>
         </div>
       </div>
 

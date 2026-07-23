@@ -55,6 +55,9 @@ export class MaintenanceService {
         warningCount++;
       }
 
+      const remHrs = pred?.remainingOperatingHours != null ? pred.remainingOperatingHours : 2450;
+      const rsot = `${remHrs.toLocaleString()} operating hrs`;
+
       fleetInsights.push({
         machineId: m._id,
         machineCode: m.machineCode,
@@ -66,7 +69,7 @@ export class MaintenanceService {
         healthScore,
         healthStatus: pred?.healthStatus || (healthScore < 50 ? 'Critical' : healthScore < 75 ? 'Warning' : 'Good'),
         riskLevel,
-        rsot: pred?.rsotEstimate || '100+ hrs',
+        rsot,
         isAnomaly: Boolean(pred?.isAnomaly),
         recommendations: pred?.recommendations || [],
         lastChecked: pred?.timestamp || m.updatedAt,

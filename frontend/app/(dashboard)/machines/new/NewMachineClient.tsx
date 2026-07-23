@@ -35,6 +35,8 @@ const schema = z.object({
   serialNumber: z.string().max(100).optional(),
   manufacturingYear: numOptional(z.number().int().min(1900).max(new Date().getFullYear())),
   installationDate: z.string().optional(),
+  commissioningDate: z.string().optional(),
+  lastMaintenanceDate: z.string().optional(),
   plant: z.string().max(100).optional(),
   department: z.string().max(100).optional(),
   location: z.string().max(200).optional(),
@@ -48,6 +50,9 @@ const schema = z.object({
   maxVibration: numOptional(z.number().nonnegative()),
   maxCurrent: numOptional(z.number().nonnegative()),
   minRPM: numOptional(z.number().nonnegative()),
+  failureTemperature: numOptional(z.number().nonnegative()),
+  failureVibration: numOptional(z.number().nonnegative()),
+  failureCurrent: numOptional(z.number().nonnegative()),
   description: z.string().max(2000).optional(),
 });
 
@@ -129,6 +134,8 @@ export default function NewMachineClient() {
       serialNumber: data.serialNumber || undefined,
       manufacturingYear: data.manufacturingYear ? Number(data.manufacturingYear) : undefined,
       installationDate: data.installationDate || undefined,
+      commissioningDate: data.commissioningDate || undefined,
+      lastMaintenanceDate: data.lastMaintenanceDate || undefined,
       plant: data.plant || undefined,
       department: data.department || undefined,
       location: data.location || undefined,
@@ -143,6 +150,9 @@ export default function NewMachineClient() {
         maxVibration: data.maxVibration ? Number(data.maxVibration) : undefined,
         maxCurrent: data.maxCurrent ? Number(data.maxCurrent) : undefined,
         minRPM: data.minRPM ? Number(data.minRPM) : undefined,
+        failureTemperature: data.failureTemperature ? Number(data.failureTemperature) : undefined,
+        failureVibration: data.failureVibration ? Number(data.failureVibration) : undefined,
+        failureCurrent: data.failureCurrent ? Number(data.failureCurrent) : undefined,
       },
       description: data.description || undefined,
       tags,
@@ -272,6 +282,14 @@ export default function NewMachineClient() {
                 <label className={labelClass}>Installation Date</label>
                 <input type="date" {...register('installationDate')} max={new Date().toISOString().split('T')[0]} className={inputClass()} />
               </div>
+              <div>
+                <label className={labelClass}>Commissioning Date</label>
+                <input type="date" {...register('commissioningDate')} max={new Date().toISOString().split('T')[0]} className={inputClass()} />
+              </div>
+              <div>
+                <label className={labelClass}>Last Maintenance Date</label>
+                <input type="date" {...register('lastMaintenanceDate')} max={new Date().toISOString().split('T')[0]} className={inputClass()} />
+              </div>
             </div>
             <div>
               <label className={labelClass}>Description</label>
@@ -333,10 +351,13 @@ export default function NewMachineClient() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
-                { key: 'maxTemperature', label: 'Max Temperature', unit: '°C', placeholder: '100' },
-                { key: 'maxVibration', label: 'Max Vibration', unit: 'mm/s', placeholder: '7.1' },
-                { key: 'maxCurrent', label: 'Max Current', unit: 'A', placeholder: '15' },
-                { key: 'minRPM', label: 'Min RPM', unit: 'RPM', placeholder: '1200' },
+                { key: 'maxTemperature', label: 'Max Temperature (Warning)', unit: '°C', placeholder: '80' },
+                { key: 'failureTemperature', label: 'Failure Temperature (Emergency)', unit: '°C', placeholder: '100' },
+                { key: 'maxVibration', label: 'Max Vibration (Warning)', unit: 'g', placeholder: '2.5' },
+                { key: 'failureVibration', label: 'Failure Vibration (Emergency)', unit: 'g', placeholder: '3.5' },
+                { key: 'maxCurrent', label: 'Max Current (Warning)', unit: 'A', placeholder: '15' },
+                { key: 'failureCurrent', label: 'Failure Current (Emergency)', unit: 'A', placeholder: '20' },
+                { key: 'minRPM', label: 'Min Safe RPM', unit: 'RPM', placeholder: '1000' },
               ].map((field) => (
                 <div key={field.key}>
                   <label className={labelClass}>{field.label}</label>

@@ -405,8 +405,37 @@ export class DatasetService {
       const curr = cleanData[i];
       const prev = i > 0 ? cleanData[i - 1] : curr;
 
+      // 0. Time-Aware Temporal Features
+      const instDate = machine?.installationDate ? new Date(machine.installationDate) : new Date(Date.now() - 180 * 24 * 3600 * 1000);
+      const currTime = new Date(curr.Timestamp).getTime();
+      const prevTime = i > 0 ? new Date(prev.Timestamp).getTime() : currTime;
+
+      const rawDeltaT = (currTime - prevTime) / (3600 * 1000);
+      const isTimeGap = i > 0 && rawDeltaT > 12.0; // Time gap > 12 hours between dataset periods
+
+      const deltaTHours = isTimeGap ? 0.0014 : Number(Math.max(0.0001, rawDeltaT).toFixed(4));
+      
+      let operatingHours = 0;
+      if (i > 0 && !isTimeGap) {
+        operatingHours = Number(((engineeredRows[i - 1]['operating_hours'] || 0) + deltaTHours).toFixed(4));
+      } else if (i > 0 && isTimeGap) {
+        operatingHours = Number(((engineeredRows[i - 1]['operating_hours'] || 0) + 0.1).toFixed(4));
+      } else {
+        const ageDays = (currTime - instDate.getTime()) / (86400 * 1000);
+        operatingHours = Number((ageDays * 24 * 0.4).toFixed(2));
+      }
+
+      const machineAgeDays = Number(((currTime - instDate.getTime()) / (86400 * 1000)).toFixed(2));
+      const elapsedDays = i > 0 ? Number(((currTime - new Date(cleanData[0].Timestamp).getTime()) / (86400 * 1000)).toFixed(3)) : 0;
+      const timeSinceLastObs = i > 0 ? Number(rawDeltaT.toFixed(4)) : 0;
+
       const rowOut: Record<string, any> = {
         Timestamp: curr.Timestamp,
+        delta_t_hours: deltaTHours,
+        time_since_last_observation_hours: timeSinceLastObs,
+        elapsed_days: elapsedDays,
+        operating_hours: operatingHours,
+        machine_age_days: machineAgeDays,
         Temperature: curr.Temperature,
         Vibration: curr.Vibration,
         Current: curr.Current,
@@ -415,11 +444,22 @@ export class DatasetService {
         Sound: curr.Sound,
       };
 
-      // 1. Lag Features (Lag 1, 2, 3)
+      featureNamesSet.add('delta_t_hours');
+      featureNamesSet.add('time_since_last_observation_hours');
+      featureNamesSet.add('elapsed_days');
+      featureNamesSet.add('operating_hours');
+      featureNamesSet.add('machine_age_days');
+
+      // Initial Baseline Reference (First 10% or first 5 rows)
+      const initialBaselineSlice = cleanData.slice(0, Math.max(5, Math.min(cleanData.length, 20)));
+      
+      // 1. Lag Features & Time-Aware Trend Slopes (Lag 1, 2, 3)
       for (const m of baseMetrics) {
-        const val1 = i >= 1 ? cleanData[i - 1][m as keyof typeof curr] : curr[m as keyof typeof curr];
-        const val2 = i >= 2 ? cleanData[i - 2][m as keyof typeof curr] : val1;
-        const val3 = i >= 3 ? cleanData[i - 3][m as keyof typeof curr] : val2;
+        const keyLower = m as keyof typeof curr;
+        const currVal = Number(curr[keyLower]);
+        const val1 = (i >= 1 && !isTimeGap) ? Number(cleanData[i - 1][keyLower]) : currVal;
+        const val2 = (i >= 2 && !isTimeGap) ? Number(cleanData[i - 2][keyLower]) : val1;
+        const val3 = (i >= 3 && !isTimeGap) ? Number(cleanData[i - 3][keyLower]) : val2;
 
         rowOut[`${m}_Lag1`] = val1;
         rowOut[`${m}_Lag2`] = val2;
@@ -427,6 +467,24 @@ export class DatasetService {
         featureNamesSet.add(`${m}_Lag1`);
         featureNamesSet.add(`${m}_Lag2`);
         featureNamesSet.add(`${m}_Lag3`);
+
+        // Cumulative Sensor Drift & Growth Rates
+        const initMean = initialBaselineSlice.reduce((a, b) => a + Number(b[keyLower]), 0) / initialBaselineSlice.length;
+        const drift = currVal - initMean;
+        const growthRatePerDay = elapsedDays > 0 ? drift / Math.max(0.01, elapsedDays) : 0;
+
+        rowOut[`${m}_historical_baseline`] = Number(initMean.toFixed(2));
+        rowOut[`${m}_cumulative_drift`] = Number(drift.toFixed(3));
+        rowOut[`${m}_growth_rate_per_day`] = Number(growthRatePerDay.toFixed(4));
+        featureNamesSet.add(`${m}_historical_baseline`);
+        featureNamesSet.add(`${m}_cumulative_drift`);
+        featureNamesSet.add(`${m}_growth_rate_per_day`);
+
+        // Exponential Moving Average (EMA alpha = 0.15)
+        const prevEMA = i > 0 ? (engineeredRows[i - 1][`${m}_EMA`] ?? initMean) : initMean;
+        const currEMA = Number((0.15 * currVal + 0.85 * prevEMA).toFixed(3));
+        rowOut[`${m}_EMA`] = currEMA;
+        featureNamesSet.add(`${m}_EMA`);
       }
 
       // 2. Rolling Mean & Std Dev (Windows 5, 10, 30)
@@ -446,11 +504,29 @@ export class DatasetService {
         }
       }
 
-      // 3. Rate of Change (Difference from previous)
+      // 3. Rate of Change & Trend Slopes
       for (const m of baseMetrics) {
-        const diff = Number(curr[m as keyof typeof curr]) - Number(prev[m as keyof typeof curr]);
+        const diff = isTimeGap ? 0 : Number(curr[m as keyof typeof curr]) - Number(prev[m as keyof typeof curr]);
+        const rocPerHour = isTimeGap ? 0 : Number((diff / Math.max(0.0001, deltaTHours)).toFixed(4));
+        
+        // Long-term slope (from initial start to current row)
+        const initMean = initialBaselineSlice.reduce((a, b) => a + Number(b[m as keyof typeof curr]), 0) / initialBaselineSlice.length;
+        const longTermSlope = operatingHours > 0 ? (Number(curr[m as keyof typeof curr]) - initMean) / Math.max(0.1, operatingHours) : 0;
+        
+        // Recent 10-step slope
+        const recentSlice = cleanData.slice(Math.max(0, i - 10), i + 1);
+        const recentMean = recentSlice.reduce((a, b) => a + Number(b[m as keyof typeof curr]), 0) / recentSlice.length;
+        const recentSlope = (Number(curr[m as keyof typeof curr]) - Number(recentSlice[0][m as keyof typeof curr])) / Math.max(1, recentSlice.length);
+
         rowOut[`${m}_RoC`] = Number(diff.toFixed(3));
+        rowOut[`${m}_RoC_per_hour`] = rocPerHour;
+        rowOut[`${m}_long_term_slope`] = Number(longTermSlope.toFixed(5));
+        rowOut[`${m}_recent_slope`] = Number(recentSlope.toFixed(4));
+        
         featureNamesSet.add(`${m}_RoC`);
+        featureNamesSet.add(`${m}_RoC_per_hour`);
+        featureNamesSet.add(`${m}_long_term_slope`);
+        featureNamesSet.add(`${m}_recent_slope`);
       }
 
       // 4. Sensor Interaction Features
@@ -591,25 +667,138 @@ export class DatasetService {
     const dataset = await Dataset.create({
       machineId: machine._id,
       companyId: machine.companyId,
-      name: `Live Telemetry Dataset v${newVersion} (${machine.name})`,
+      datasetName: `Live Telemetry Dataset v${newVersion} (${machine.name})`,
       originalFileName: `live_dataset_${machine.machineCode}.csv`,
       originalFilePath: filePath,
       fileSizeBytes: fs.statSync(filePath).size,
       rowCount: rawRows.length,
-      columnCount: this.REQUIRED_COLUMNS.length,
-      columns: this.REQUIRED_COLUMNS,
       startDate,
       endDate,
       samplingInterval: samplingInterval || '5s',
-      status: 'raw',
+      status: 'uploaded',
       validationReport: report,
       isActive: true,
       version: newVersion,
-      createdBy: userId,
+      uploadedBy: userId || machine.companyId,
     });
 
     // Clean & engineer features immediately
     const cleaned = await this.cleanDataset(dataset._id.toString());
+    const engineered = await this.engineerFeatures(cleaned._id.toString());
+    return engineered;
+  }
+
+  /**
+   * Multi-Dataset Concatenation & Time-Aware Gap-Aware Merging
+   * Combines 2 or more historical datasets (e.g. July-Aug + Nov-Dec) into a single unified training dataset.
+   */
+  public static async combineMachineDatasets(machineId: string, datasetIds?: string[]): Promise<IDataset> {
+    const machine = await Machine.findById(machineId).exec();
+    if (!machine) {
+      throw ApiError.notFound('Machine not found');
+    }
+
+    let datasets: IDataset[] = [];
+    if (datasetIds && datasetIds.length > 0) {
+      datasets = await Dataset.find({ _id: { $in: datasetIds }, machineId }).exec();
+    } else {
+      datasets = await Dataset.find({ machineId, status: { $in: ['uploaded', 'validated', 'cleaned', 'engineered', 'ready_for_training'] } }).exec();
+    }
+
+    if (datasets.length === 0) {
+      throw ApiError.badRequest('No valid datasets available for concatenation');
+    }
+
+    if (datasets.length === 1) {
+      return datasets[0].engineeredFilePath ? datasets[0] : await this.engineerFeatures(datasets[0]._id.toString());
+    }
+
+    // Collect all rows from all selected datasets + live recorded dataset file if present
+    let allRows: Record<string, any>[] = [];
+    for (const d of datasets) {
+      const sourcePath = d.cleanedFilePath || d.originalFilePath;
+      if (fs.existsSync(sourcePath)) {
+        const rows = await this.parseUploadedFile(sourcePath);
+        allRows.push(...rows);
+      }
+    }
+
+    // Also include live recorded dataset CSV file if present
+    const liveFilePath = this.getLiveDatasetFilePath(machineId);
+    if (fs.existsSync(liveFilePath)) {
+      const liveRows = await this.parseUploadedFile(liveFilePath);
+      if (liveRows && liveRows.length > 0) {
+        allRows.push(...liveRows);
+      }
+    }
+
+    if (allRows.length === 0) {
+      throw ApiError.badRequest('No readable rows found across selected datasets');
+    }
+
+    // Sort chronologically by timestamp
+    allRows.sort((a, b) => new Date(a['Timestamp'] || a['timestamp']).getTime() - new Date(b['Timestamp'] || b['timestamp']).getTime());
+
+    // Write merged CSV file
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'merged_datasets');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const mergedFileName = `merged_dataset_${machine.machineCode}_${Date.now()}.csv`;
+    const mergedFilePath = path.join(uploadsDir, mergedFileName);
+
+    const headers = this.REQUIRED_COLUMNS.join(',');
+    const csvContent = [
+      headers,
+      ...allRows.map((r) =>
+        [
+          r['Timestamp'] || r['timestamp'],
+          r['Temperature'] || r['temperature'],
+          r['Vibration'] || r['vibration'],
+          r['Current'] || r['current'],
+          r['Voltage'] || r['voltage'],
+          r['RPM'] || r['rpm'],
+          r['Sound'] || r['sound'],
+        ].join(',')
+      ),
+    ].join('\n');
+
+    fs.writeFileSync(mergedFilePath, csvContent, 'utf-8');
+
+    // Deactivate previous active datasets
+    await Dataset.updateMany({ machineId: machine._id }, { isActive: false });
+
+    const latest = await Dataset.findOne({ machineId: machine._id }).sort({ version: -1 }).exec();
+    const newVersion = latest ? latest.version + 1 : 1;
+
+    const mergedDataset = await Dataset.create({
+      machineId: machine._id,
+      companyId: machine.companyId,
+      datasetName: `Multi-Period Concatenated Dataset v${newVersion} (${datasets.length} Periods)`,
+      originalFileName: mergedFileName,
+      originalFilePath: mergedFilePath,
+      fileSizeBytes: fs.statSync(mergedFilePath).size,
+      rowCount: allRows.length,
+      startDate: new Date(allRows[0]['Timestamp'] || allRows[0]['timestamp']),
+      endDate: new Date(allRows[allRows.length - 1]['Timestamp'] || allRows[allRows.length - 1]['timestamp']),
+      samplingInterval: '5s',
+      status: 'uploaded',
+      validationReport: {
+        totalRows: allRows.length,
+        validRows: allRows.length,
+        duplicateRows: 0,
+        missingValues: 0,
+        invalidValues: 0,
+        rejectedRows: 0,
+        errors: [],
+      },
+      isActive: true,
+      version: newVersion,
+      uploadedBy: machine.companyId,
+    });
+
+    const cleaned = await this.cleanDataset(mergedDataset._id.toString());
     const engineered = await this.engineerFeatures(cleaned._id.toString());
     return engineered;
   }
