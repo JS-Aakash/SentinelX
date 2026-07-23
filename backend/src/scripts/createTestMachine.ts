@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 import { Machine, MachineStatus, AILifecycleStatus, DataSourcePreference } from '../models/Machine';
 import { Company } from '../models/Company';
 
-const MONGO_URI = process.env.MONGODB_URI || 'mongodb+srv://Aakash:sentinel@database1.vsmdyho.mongodb.net/?appName=DataBase1';
+const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sentinelx';
 
 async function seed() {
   try {

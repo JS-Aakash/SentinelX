@@ -118,6 +118,7 @@ export default function DashboardClient() {
   const [data, setData] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProfileDetails, setShowProfileDetails] = useState(false);
+  const [selectedMachineId, setSelectedMachineId] = useState<string>('all');
 
   // Active AI Anomaly & Threat Notifications stream for user-centric alerts
   const [liveAlerts, setLiveAlerts] = useState<Array<{
@@ -216,23 +217,20 @@ export default function DashboardClient() {
   return (
     <div className="space-y-6 animate-fade-in font-sans pb-10">
       {/* ─── Creative Hero Banner (Cybernetic Glassmorphism & Visual Excellence) ─────── */}
-      <div className="rounded-3xl bg-gradient-to-br from-[#0B0D18] via-[#101426] to-[#0A0C16] border border-[#1E243A] p-7 sm:p-8 relative overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
+      <div className="rounded-3xl bg-gradient-to-br from-[#0B0D18] via-[#101426] to-[#0A0C16] border border-[#1E243A] p-6 sm:p-8 relative overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
         {/* Glowing Geometric Background Accents */}
         <div className="absolute -top-24 -right-24 w-96 h-96 bg-gradient-to-br from-[#38BDF8]/20 to-[#818CF8]/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-20 left-1/3 w-80 h-80 bg-gradient-to-tr from-[#34D399]/15 to-[#38BDF8]/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute top-1/2 left-0 w-48 h-48 bg-[#A855F7]/10 rounded-full blur-2xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-wrap items-center justify-between gap-6">
-          <div className="space-y-3.5 max-w-2xl font-mono">
-            <div className="flex flex-wrap items-center gap-2.5 text-xs text-[#94A3B8]">
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+          {/* Left Column (7 Cols): Greetings & System Summary */}
+          <div className="lg:col-span-7 space-y-4 font-mono">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[#94A3B8]">
               <span className="text-white font-medium">{greeting}, <strong className="text-[#38BDF8] font-bold">{user?.name}</strong></span>
               <span className="text-[#475569]">·</span>
               <span className="px-2.5 py-0.5 rounded-md bg-[#1E2438] text-[#E2E8F0] text-[11px]">
                 {company?.name || 'SentinelX Hub'}
-              </span>
-              <span className="px-3 py-0.5 rounded-full bg-gradient-to-r from-[#38BDF8]/15 via-[#3B82F6]/15 to-[#A855F7]/15 border border-[#38BDF8]/30 text-[11px] font-extrabold text-[#38BDF8] uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_15px_rgba(56,189,248,0.2)]">
-                <Sparkles size={11} className="text-[#00F2FE] animate-pulse" />
-                Predict · Protect · Prolong
               </span>
             </div>
 
@@ -244,66 +242,90 @@ export default function DashboardClient() {
               Next-generation industrial IoT telemetry, neural health indexing, Remaining Useful Life (RUL) forecasting, and AI anomaly defense.
             </p>
 
-            {/* 3 Cybernetic Intelligence Pillars */}
-            <div className="pt-2 grid grid-cols-3 gap-2.5 max-w-lg text-[10px]">
-              <div className="p-2.5 rounded-xl bg-[#121626] border border-[#202740] flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-[#38BDF8]/15 border border-[#38BDF8]/30 flex items-center justify-center text-[#38BDF8] shrink-0">
-                  <Brain size={13} />
-                </div>
-                <div>
-                  <span className="font-bold text-white block uppercase tracking-wider">PREDICT</span>
-                  <span className="text-[#64748B] text-[9px] block">RUL & Health Trends</span>
-                </div>
-              </div>
+            <div className="pt-2 flex flex-wrap items-center gap-3">
+              <button
+                onClick={loadDashboard}
+                disabled={loading}
+                className="p-3 rounded-2xl border border-[#262E48] bg-[#141828]/80 text-[#94A3B8] hover:text-white hover:border-[#38BDF8] hover:bg-[#1A2035] transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 text-xs font-mono"
+                title="Refresh Telemetry Data"
+              >
+                <RefreshCw size={16} className={cn(loading && 'animate-spin')} />
+                <span className="hidden sm:inline">Refresh Fleet</span>
+              </button>
 
-              <div className="p-2.5 rounded-xl bg-[#121626] border border-[#202740] flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-[#34D399]/15 border border-[#34D399]/30 flex items-center justify-center text-[#34D399] shrink-0">
-                  <ShieldCheck size={13} />
-                </div>
-                <div>
-                  <span className="font-bold text-white block uppercase tracking-wider">PROTECT</span>
-                  <span className="text-[#64748B] text-[9px] block">Anomaly Defense</span>
-                </div>
-              </div>
+              <Link
+                href="/simulation"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#141A2E] border border-[#2B3658] hover:border-[#38BDF8] text-[#38BDF8] text-xs font-mono font-bold px-4 py-3 transition-all hover:bg-[#1A233D] active:scale-95 shadow-md"
+              >
+                <Sliders size={16} /> LIVE SIMULATOR
+              </Link>
 
-              <div className="p-2.5 rounded-xl bg-[#121626] border border-[#202740] flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-[#A855F7]/15 border border-[#A855F7]/30 flex items-center justify-center text-[#A855F7] shrink-0">
-                  <Zap size={13} />
-                </div>
-                <div>
-                  <span className="font-bold text-white block uppercase tracking-wider">PROLONG</span>
-                  <span className="text-[#64748B] text-[9px] block">Asset Lifespan</span>
-                </div>
-              </div>
+              {canWrite && (
+                <Link
+                  href="/machines/new"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#38BDF8] via-[#3B82F6] to-[#6366F1] hover:from-[#60A5FA] hover:to-[#4F46E5] text-white text-xs font-mono font-bold px-5 py-3 transition-all shadow-[0_0_30px_rgba(56,189,248,0.3)] hover:shadow-[0_0_35px_rgba(56,189,248,0.5)] active:scale-95"
+                >
+                  <Plus size={16} /> ADD MACHINE ASSET
+                </Link>
+              )}
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <button
-              onClick={loadDashboard}
-              disabled={loading}
-              className="p-3 rounded-2xl border border-[#262E48] bg-[#141828]/80 text-[#94A3B8] hover:text-white hover:border-[#38BDF8] hover:bg-[#1A2035] transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 text-xs font-mono"
-              title="Refresh Telemetry Data"
-            >
-              <RefreshCw size={16} className={cn(loading && 'animate-spin')} />
-              <span className="sm:hidden">Refresh Data</span>
-            </button>
+          {/* Right Column (5 Cols): Cybernetic Fleet Radar & Neural Gauge Widget */}
+          <div className="lg:col-span-5 rounded-2xl border border-[#1E243A] bg-[#0A0C16]/90 p-4 font-mono space-y-3 relative overflow-hidden backdrop-blur-md">
+            <div className="flex items-center justify-between border-b border-[#181B28] pb-2.5 text-[11px]">
+              <span className="font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <Brain size={14} className="text-[#00F2FE]" />
+                FLEET HEALTH RADAR
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-[#34D399]/10 border border-[#34D399]/30 text-[9px] font-bold text-[#34D399] uppercase flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-ping" />
+                NEURAL ENGINE ACTIVE
+              </span>
+            </div>
 
-            <Link
-              href="/simulation"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#141A2E] border border-[#2B3658] hover:border-[#38BDF8] text-[#38BDF8] text-xs font-mono font-bold px-4 py-3 transition-all hover:bg-[#1A233D] active:scale-95 shadow-md"
-            >
-              <Sliders size={16} /> LIVE SIMULATOR
-            </Link>
+            <div className="flex items-center justify-between gap-4 py-1">
+              {/* Circular Health Dial */}
+              <div className="relative w-24 h-24 shrink-0 flex items-center justify-center">
+                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="40" className="stroke-[#141724]" strokeWidth="8" fill="transparent" />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="40"
+                    stroke="#00E676"
+                    strokeWidth="8"
+                    strokeDasharray={2 * Math.PI * 40}
+                    strokeDashoffset={2 * Math.PI * 40 * (1 - (data?.averageHealthIndex ?? 78.5) / 100)}
+                    strokeLinecap="round"
+                    fill="transparent"
+                    className="transition-all duration-1000 ease-out"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                  <span className="text-lg font-black text-white tabular-nums">
+                    {data?.averageHealthIndex != null ? `${data.averageHealthIndex}%` : '78.5%'}
+                  </span>
+                  <span className="text-[7px] text-[#64748B] uppercase font-bold">AVG HEALTH</span>
+                </div>
+              </div>
 
-            {canWrite && (
-              <Link
-                href="/machines/new"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#38BDF8] via-[#3B82F6] to-[#6366F1] hover:from-[#60A5FA] hover:to-[#4F46E5] text-white text-xs font-mono font-bold px-5 py-3 transition-all shadow-[0_0_30px_rgba(56,189,248,0.3)] hover:shadow-[0_0_35px_rgba(56,189,248,0.5)] active:scale-95"
-              >
-                <Plus size={16} /> ADD MACHINE ASSET
-              </Link>
-            )}
+              {/* Status Breakdown Pills */}
+              <div className="space-y-2 text-[10px] flex-1">
+                <div className="flex justify-between items-center bg-[#121626] p-2 rounded-xl border border-[#1E2438]">
+                  <span className="text-[#94A3B8]">Operational Assets</span>
+                  <span className="font-bold text-[#34D399]">{data?.machines.active ?? 0} Active</span>
+                </div>
+                <div className="flex justify-between items-center bg-[#121626] p-2 rounded-xl border border-[#1E2438]">
+                  <span className="text-[#94A3B8]">Registered Gateways</span>
+                  <span className="font-bold text-[#38BDF8]">{data?.devices.total ?? 0} Devices</span>
+                </div>
+                <div className="flex justify-between items-center bg-[#121626] p-2 rounded-xl border border-[#1E2438]">
+                  <span className="text-[#94A3B8]">Inference Pipeline</span>
+                  <span className="font-bold text-[#A855F7]">1,000ms Polling</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -342,8 +364,8 @@ export default function DashboardClient() {
           <StatWidget
             icon={Radio}
             label="IoT Gateways"
-            value={data?.devices.online ?? 0}
-            subtitle={`/ ${data?.devices.total ?? 0}`}
+            value={data?.devices.total ?? 0}
+            subtitle={`${data?.devices.online ?? 0} ONLINE`}
             color="bg-[#38BDF8]/15 text-[#38BDF8] border-[#38BDF8]/40"
             href="/devices"
           />
@@ -363,14 +385,14 @@ export default function DashboardClient() {
         </div>
       </div>
 
-      {/* ─── Cybernetic Live Telemetry Signal Matrix & Fleet Status Distribution ───────────────────────── */}
+      {/* ─── Cybernetic Live Telemetry Signal Matrix & Fleet Status Ratio Column ───────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 font-mono">
         {/* Left Column (2 Cols): Cybernetic Live Waveform Stream & Signal Matrix */}
         <div className="lg:col-span-2 rounded-3xl border border-[#1B1E2E] bg-[#0A0B12] p-6 flex flex-col justify-between space-y-4 shadow-xl relative overflow-hidden">
           {/* Subtle background glow */}
           <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-[#38BDF8]/10 via-[#3B82F6]/5 to-transparent rounded-full blur-3xl pointer-events-none" />
 
-          <div className="flex items-center justify-between border-b border-[#181B28] pb-4 relative z-10">
+          <div className="flex flex-wrap items-center justify-between border-b border-[#181B28] pb-4 relative z-10 gap-3">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#38BDF8]/20 to-[#3B82F6]/20 border border-[#38BDF8]/40 flex items-center justify-center text-[#38BDF8] shadow-[0_0_15px_rgba(56,189,248,0.2)]">
                 <Activity size={18} className="animate-pulse" />
@@ -378,23 +400,36 @@ export default function DashboardClient() {
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-bold text-white text-xs uppercase tracking-wider">
-                    REAL-TIME TELEMETRY WAVEFORM & SIGNAL MATRIX
+                    FLEET AGGREGATE TELEMETRY & HEALTH SPECTRUM
                   </h3>
                   <span className="px-2 py-0.5 rounded-full bg-[#34D399]/10 border border-[#34D399]/30 text-[9px] font-bold text-[#34D399] uppercase tracking-widest flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-ping" />
-                    LIVE STREAM
+                    LIVE SPECTRUM
                   </span>
                 </div>
-                <p className="text-[10px] text-[#64748B]">Multi-channel hardware acquisition & DSP feature extraction</p>
+                <p className="text-[10px] text-[#64748B]">
+                  {selectedMachineId === 'all'
+                    ? `Averaged Multi-Asset Telemetry Baseline across ${data?.machines.active || 1} Operational Fleet Assets`
+                    : `Live Telemetry Stream for ${data?.machineFleet.find(m => m._id === selectedMachineId)?.name || 'Selected Asset'}`}
+                </p>
               </div>
             </div>
 
-            <Link
-              href="/simulation"
-              className="px-3 py-1.5 rounded-xl bg-[#141A2E] border border-[#2B3658] text-[10px] font-bold text-[#38BDF8] hover:bg-[#1A233D] transition-all flex items-center gap-1.5"
-            >
-              <Sliders size={12} /> CONTROLS
-            </Link>
+            {/* Target Machine Selector Dropdown */}
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedMachineId}
+                onChange={(e) => setSelectedMachineId(e.target.value)}
+                className="bg-[#121626] border border-[#202740] rounded-xl px-3 py-1.5 text-[11px] font-bold text-[#38BDF8] focus:outline-none focus:border-[#38BDF8] transition-all cursor-pointer"
+              >
+                <option value="all">All Fleet Assets (Fleet Average)</option>
+                {data?.machineFleet.map((m) => (
+                  <option key={m._id} value={m._id}>
+                    {m.name} ({m.machineCode})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* 4 Interactive Live Signal Waveform Stream Cards */}
@@ -411,8 +446,12 @@ export default function DashboardClient() {
                 </span>
               </div>
               <div className="flex items-baseline justify-between pt-1">
-                <span className="text-xl font-bold text-white tabular-nums">46.5 °C</span>
-                <span className="text-[10px] text-[#34D399] font-bold">OPTIMAL (4% Stress)</span>
+                <span className="text-xl font-bold text-white tabular-nums">
+                  {selectedMachineId !== 'all' && data?.machineFleet.find(m => m._id === selectedMachineId)?.latestTemperature != null
+                    ? `${data.machineFleet.find(m => m._id === selectedMachineId)?.latestTemperature} °C`
+                    : '42.5 °C'}
+                </span>
+                <span className="text-[10px] text-[#34D399] font-bold">OPTIMAL (0% Stress)</span>
               </div>
               {/* CSS Animated Wave Visualizer */}
               <div className="h-6 w-full flex items-end gap-1 pt-1 opacity-80">
@@ -492,7 +531,11 @@ export default function DashboardClient() {
                 </span>
               </div>
               <div className="flex items-baseline justify-between pt-1">
-                <span className="text-xl font-bold text-white tabular-nums">1,480 RPM</span>
+                <span className="text-xl font-bold text-white tabular-nums">
+                  {selectedMachineId !== 'all' && data?.machineFleet.find(m => m._id === selectedMachineId)?.latestRPM != null
+                    ? `${data.machineFleet.find(m => m._id === selectedMachineId)?.latestRPM} RPM`
+                    : '1,480 RPM'}
+                </span>
                 <span className="text-[10px] text-[#38BDF8] font-bold">NOMINAL</span>
               </div>
               {/* CSS Animated Wave Visualizer */}
@@ -516,53 +559,113 @@ export default function DashboardClient() {
           </div>
         </div>
 
-        {/* Right Column: Fleet Status Distribution Donut Chart */}
-        <div className="rounded-3xl border border-[#1B1E2E] bg-[#0A0B12] p-6 flex flex-col justify-between space-y-3 shadow-xl">
-          <div className="flex items-center justify-between border-b border-[#181B28] pb-3.5">
-            <h3 className="font-bold text-white text-xs uppercase tracking-wider">
-              FLEET STATUS RATIO
-            </h3>
-            <span className="text-[10px] text-[#64748B]">DISTRIBUTION</span>
+        {/* Right Column (1 Col): Fleet Status Donut Chart & Stacked Predict, Protect, Prolong Cards */}
+        <div className="flex flex-col justify-between space-y-4">
+          {/* Fleet Status Donut Chart (Compact) */}
+          <div className="rounded-3xl border border-[#1B1E2E] bg-[#0A0B12] p-4 flex flex-col justify-between space-y-2 shadow-xl">
+            <div className="flex items-center justify-between border-b border-[#181B28] pb-2 text-[11px]">
+              <h3 className="font-bold text-white uppercase tracking-wider">
+                FLEET STATUS RATIO
+              </h3>
+              <span className="text-[9px] text-[#64748B]">DISTRIBUTION</span>
+            </div>
+
+            <div className="h-24 w-full flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'Operational', value: data?.machines.active || 1, color: '#34D399' },
+                      { name: 'Idle', value: data?.machines.idle || 0, color: '#38BDF8' },
+                      { name: 'Maintenance', value: data?.machines.maintenance || 0, color: '#F59E0B' },
+                      { name: 'Offline', value: data?.machines.offline || 0, color: '#64748B' },
+                      { name: 'Fault', value: data?.machines.fault || 0, color: '#F43F5E' },
+                    ]}
+                    innerRadius={28}
+                    outerRadius={42}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {[
+                      { name: 'Operational', color: '#34D399' },
+                      { name: 'Idle', color: '#38BDF8' },
+                      { name: 'Maintenance', color: '#F59E0B' },
+                      { name: 'Offline', color: '#64748B' },
+                      { name: 'Fault', color: '#F43F5E' },
+                    ].map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} stroke="#0A0B12" strokeWidth={2} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#0D0E17', borderColor: '#1E2338', borderRadius: '8px', fontSize: '11px', color: '#fff', fontFamily: 'monospace' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1 text-[9px] text-[#94A3B8] border-t border-[#181B28] pt-2">
+              <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" /> Active ({data?.machines.active || 0})</div>
+              <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8]" /> Idle ({data?.machines.idle || 0})</div>
+              <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" /> Maint ({data?.machines.maintenance || 0})</div>
+              <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#F43F5E]" /> Fault ({data?.machines.fault || 0})</div>
+            </div>
           </div>
 
-          <div className="h-44 w-full flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={[
-                    { name: 'Operational', value: data?.machines.active || 1, color: '#34D399' },
-                    { name: 'Idle', value: data?.machines.idle || 0, color: '#38BDF8' },
-                    { name: 'Maintenance', value: data?.machines.maintenance || 0, color: '#F59E0B' },
-                    { name: 'Offline', value: data?.machines.offline || 0, color: '#64748B' },
-                    { name: 'Fault', value: data?.machines.fault || 0, color: '#F43F5E' },
-                  ]}
-                  innerRadius={46}
-                  outerRadius={68}
-                  paddingAngle={4}
-                  dataKey="value"
-                >
-                  {[
-                    { name: 'Operational', color: '#34D399' },
-                    { name: 'Idle', color: '#38BDF8' },
-                    { name: 'Maintenance', color: '#F59E0B' },
-                    { name: 'Offline', color: '#64748B' },
-                    { name: 'Fault', color: '#F43F5E' },
-                  ].map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} stroke="#0A0B12" strokeWidth={2} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#0D0E17', borderColor: '#1E2338', borderRadius: '8px', fontSize: '11px', color: '#fff', fontFamily: 'monospace' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          {/* Stacked Predict, Protect, Prolong Cybernetic Cards (Fills wasted space in right column!) */}
+          <div className="space-y-2.5">
+            {/* PREDICT Card */}
+            <div className="rounded-2xl border border-[#38BDF8]/30 bg-gradient-to-br from-[#0B0E1B] via-[#0E1326] to-[#0A0C16] p-3 space-y-1 relative overflow-hidden group hover:border-[#38BDF8]/60 transition-all shadow-md">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-md bg-[#38BDF8]/15 border border-[#38BDF8]/30 flex items-center justify-center text-[#38BDF8] shrink-0">
+                    <Brain size={11} />
+                  </div>
+                  <span className="text-[11px] font-bold text-white uppercase tracking-wider">PREDICT</span>
+                </div>
+                <span className="text-[8px] text-[#38BDF8] bg-[#38BDF8]/10 px-1.5 py-0.5 rounded border border-[#38BDF8]/30 font-bold">
+                  XGBoost RUL
+                </span>
+              </div>
+              <p className="text-[10px] text-[#94A3B8] leading-tight font-sans">
+                Neural RUL & degradation curve forecasting trained on multi-sensor features.
+              </p>
+            </div>
 
-          <div className="grid grid-cols-2 gap-2 text-[10px] text-[#94A3B8] border-t border-[#181B28] pt-3">
-            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#34D399]" /> Operational ({data?.machines.active || 0})</div>
-            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#38BDF8]" /> Idle ({data?.machines.idle || 0})</div>
-            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#F59E0B]" /> Maint ({data?.machines.maintenance || 0})</div>
-            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#F43F5E]" /> Fault ({data?.machines.fault || 0})</div>
+            {/* PROTECT Card */}
+            <div className="rounded-2xl border border-[#34D399]/30 bg-gradient-to-br from-[#0B0E1B] via-[#0E1920] to-[#0A0C16] p-3 space-y-1 relative overflow-hidden group hover:border-[#34D399]/60 transition-all shadow-md">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-md bg-[#34D399]/15 border border-[#34D399]/30 flex items-center justify-center text-[#34D399] shrink-0">
+                    <ShieldCheck size={11} />
+                  </div>
+                  <span className="text-[11px] font-bold text-white uppercase tracking-wider">PROTECT</span>
+                </div>
+                <span className="text-[8px] text-[#34D399] bg-[#34D399]/10 px-1.5 py-0.5 rounded border border-[#34D399]/30 font-bold">
+                  Anomaly Shield
+                </span>
+              </div>
+              <p className="text-[10px] text-[#94A3B8] leading-tight font-sans">
+                Real-time isolation forest anomaly detection and thermal stress limit alarms.
+              </p>
+            </div>
+
+            {/* PROLONG Card */}
+            <div className="rounded-2xl border border-[#A855F7]/30 bg-gradient-to-br from-[#0B0E1B] via-[#150E26] to-[#0A0C16] p-3 space-y-1 relative overflow-hidden group hover:border-[#A855F7]/60 transition-all shadow-md">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-md bg-[#A855F7]/15 border border-[#A855F7]/30 flex items-center justify-center text-[#A855F7] shrink-0">
+                    <Zap size={11} />
+                  </div>
+                  <span className="text-[11px] font-bold text-white uppercase tracking-wider">PROLONG</span>
+                </div>
+                <span className="text-[8px] text-[#A855F7] bg-[#A855F7]/10 px-1.5 py-0.5 rounded border border-[#A855F7]/30 font-bold">
+                  PdM Extended
+                </span>
+              </div>
+              <p className="text-[10px] text-[#94A3B8] leading-tight font-sans">
+                Proactive maintenance scheduling & operating hours optimization for max lifespan.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -743,11 +846,11 @@ export default function DashboardClient() {
           <div className="space-y-2 p-4 rounded-2xl bg-[#0E101B] border border-[#1B2034]">
             <p className="text-sm font-extrabold text-white flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#34D399]" />
-              {user?.name || 'Aakash'}
+              {user?.name || 'Operator'}
             </p>
             <div className="space-y-1 text-[#94A3B8] text-[11px] pt-1">
               <p><span className="text-[#64748B]">Operator Role:</span> {getRoleLabel(user?.role as any || 'company_admin')}</p>
-              <p><span className="text-[#64748B]">Account Email:</span> {user?.email || 'aakash@sentinelx.com'}</p>
+              <p><span className="text-[#64748B]">Account Email:</span> {user?.email || 'operator@sentinelx.com'}</p>
               <p><span className="text-[#64748B]">Provisioned:</span> {user?.createdAt ? formatDate(user.createdAt) : 'Active'}</p>
             </div>
           </div>

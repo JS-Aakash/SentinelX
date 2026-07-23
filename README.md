@@ -1,7 +1,10 @@
-# SentinelX – AI-Powered Industrial Asset Intelligence Platform
-> *Predict. Prevent. Prolong.*
+# 🛡️ SentinelX – AI-Powered Industrial Asset Intelligence Platform
 
-SentinelX is an end-to-end, production-grade AI-powered Industrial Asset Intelligence and Predictive Maintenance Platform. It combines real-time IoT sensor data streaming, machine learning anomaly detection, recursive multi-step forecasting, and Remaining Safe Operating Time (RSOT) estimation to prevent industrial equipment failures before they happen.
+> **Real-Time IoT Telemetry Processing · XGBoost RUL Forecasting · Isolation Forest Anomaly Shield · Multi-Tenant Industrial Governance**
+
+---
+
+SentinelX is an end-to-end, production-grade **AI-Powered Industrial Asset Intelligence and Predictive Maintenance Platform**. Designed for modern smart factories and heavy manufacturing fleets, SentinelX integrates real-time IoT hardware acquisition (ESP32 microcontrollers, ADXL345 vibration, DHT22 temperature, ACS712 current), machine learning health indexing, multi-output XGBoost Remaining Useful Life (RUL) forecasting, and WebSockets live waveform stream analytics to prevent machine failures before they happen.
 
 ---
 
@@ -10,45 +13,50 @@ SentinelX is an end-to-end, production-grade AI-powered Industrial Asset Intelli
 ```
 SentinelX/
 ├── backend/           Node.js + Express 5 + TypeScript + MongoDB + Socket.io
-├── frontend/          Next.js 15 (App Router) + TypeScript + Tailwind CSS v4 + shadcn/ui
-└── python-service/    Python 3.12 + FastAPI + XGBoost + Isolation Forest + scikit-learn
+├── frontend/          Next.js 14/15 (App Router) + TypeScript + Tailwind CSS + Lucide
+├── python-service/    FastAPI + Uvicorn + XGBoost + Isolation Forest + scikit-learn
+└── scripts/           ESP32 Serial/MQTT Telemetry Ingestion Bridge (`esp32_bridge.js`)
 ```
 
 ```
-[ ESP32 / IoT Sensors ] ──> [ Socket.io / REST API ] ──> [ Express Backend ] ──> [ MongoDB Atlas ]
-                                                                 │
-                                                                 ▼
-[ Next.js 15 Frontend ] <── [ Real-Time Telemetry & AI ] <── [ Python AI Microservice ]
+[ ESP32 Hardware / Sensors ] ──> [ Serial / MQTT Bridge ] ──> [ Express Backend ] ──> [ MongoDB ]
+  (DHT22, ADXL345, ACS712)            (esp32_bridge.js)                │
+                                                                       ▼
+[ Next.js 14 Frontend ] <───── [ Real-Time Socket.IO ] ───── < [ Python AI FastAPI ]
 ```
 
 ---
 
 ## ✨ Key Features
 
-- **🔐 Multi-Tenant Auth & RBAC**: JWT Access/Refresh tokens with rotation, role-based authorization (`super_admin`, `company_admin`, `maintenance_engineer`, `machine_operator`), SMTP password reset flow.
-- **🏭 Machine Registry & Asset Management**: Comprehensive machine specs (30+ fields covering electrical, mechanical, plant/location metadata) with Cloudinary image uploads.
-- **📡 IoT Device & Sensor Management**: ESP32 device registration, strict 1-device-per-machine assignment enforcement, and 6 standard auto-provisioned sensors per microcontroller:
-  1. **Temperature** (DS18B20 - °C)
-  2. **Vibration** (MPU6050 - m/s²)
-  3. **Current** (ACS712 - A)
-  4. **Voltage** (V)
-  5. **RPM** (RPM)
-  6. **Sound** (MAX4466 - dB)
-- **⚡ Real-Time Telemetry Streaming**: WebSockets via Socket.io for live sensor data visualization, gauge metrics, and alert triggers.
-- **🤖 Python AI & Machine Learning Engine**:
-  - **Per-Machine XGBoost Models**: Independent multi-output regressors trained on machine historical telemetry.
-  - **Isolation Forest**: Multi-dimensional anomaly scoring and outlier detection.
-  - **100-Step Recursive Forecasting**: Predicts future sensor trajectories up to 100 time steps ahead.
-  - **RSOT (Remaining Safe Operating Time) Estimator**: Calculates exact time-to-threshold breach for operating boundaries.
+- **📡 Real-Time Microcontroller Hardware Telemetry**:
+  - ESP32 Serial & MQTT ingestion bridge supporting physical sensor buses:
+    - **Temperature**: DHT22 / DS18B20 (°C)
+    - **Dynamic Vibration**: ADXL345 3-Axis Accelerometer ($X, Y, Z$ gravity vector magnitude & dynamic vibration isolation)
+    - **Current**: ACS712 Hall-Effect Transducer (Amperes)
+    - **Speed & Acoustics**: Tachometer & Sound Transducer (RPM / dB)
+- **🤖 XGBoost & Isolation Forest AI Engine**:
+  - **Machine Health Score Index (0–100%)**: Multi-sensor rated-relative stress calculation algorithm.
+  - **Remaining Useful Life (RUL) Estimator**: XGBoost regressor forecasting operating degradation curves.
+  - **Isolation Forest Anomaly Shield**: Multi-dimensional outlier detection and automated risk alarm generation.
+  - **10,000 Sample Training Threshold Safeguard**: Prevents premature model training until sufficient telemetry is collected.
+- **📊 Cybernetic Fleet Dashboard & Signal Matrix**:
+  - **Fleet Health Radar**: Interactive circular SVG health meter and 1,000ms hardware polling frequency indicator.
+  - **Fleet Aggregate Telemetry & Health Spectrum**: Multi-asset baseline telemetry stream with interactive machine target dropdown selector.
+  - **Compact Fleet Status Ratio**: Dynamic distribution pie chart mapping Operational, Idle, Maintenance, Offline, and Fault assets.
+  - **Predict · Protect · Prolong Cybernetic Feature Cards**: Stacked visual matrix highlighting RUL forecasting, anomaly defense, and PdM optimization.
+- **🔐 Multi-Tenant Governance & RBAC**:
+  - Role-based authorization (`super_admin`, `company_admin`, `maintenance_engineer`, `machine_operator`).
+  - Strict JWT Access & Refresh token rotation.
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Quick Start & Installation Guide
 
 ### Prerequisites
-- **Node.js** ≥ 18
-- **Python** ≥ 3.10
-- **MongoDB** (Local `mongodb://localhost:27017` or MongoDB Atlas URI)
+- **Node.js**: `v18.x` or higher
+- **Python**: `v3.10` or higher
+- **MongoDB**: Local MongoDB (`mongodb://localhost:27017/sentinelx`) or MongoDB Atlas
 
 ---
 
@@ -57,104 +65,89 @@ SentinelX/
 ```bash
 cd python-service
 python -m pip install -r requirements.txt
-python main.py        
+python main.py
 ```
+*AI Microservice will start listening on `http://localhost:8000`.*
 
 ---
 
-### 2. Backend Setup
+### 2. Backend API & WebSockets Gateway Setup
 
 ```bash
 cd backend
-cp .env.example .env      
-npm install
-npm run dev               
+cp .env.example .env
 ```
+
+Ensure your `.env` configuration contains your local MongoDB URI:
+```env
+PORT=5000
+NODE_ENV=development
+MONGODB_URI=mongodb://localhost:27017/sentinelx
+JWT_SECRET=your_jwt_secret_key
+PYTHON_AI_SERVICE_URL=http://localhost:8000
+```
+
+Install dependencies and launch the backend dev server:
+```bash
+npm install
+npm run dev
+```
+*Backend API server will run on `http://localhost:5000`.*
 
 ---
 
-### 3. Frontend Setup
+### 3. Frontend Web Application Setup
 
 ```bash
 cd frontend
 npm install
-npm run dev              
+npm run dev
 ```
+*Frontend Next.js application will launch on `http://localhost:3000`.*
 
 ---
 
-### 4. Access the Application
-Navigate to **http://localhost:3000** in your browser, register a company, add your industrial machines and ESP32 devices, and access real-time AI telemetry insights!
+### 4. ESP32 Microcontroller Telemetry Bridge (Optional Hardware Ingestion)
+
+Connect your ESP32 microcontroller running `sensors.ino` via USB COM port or WiFi, then launch the telemetry bridge:
+
+```bash
+# In project root:
+node scripts/esp32_bridge.js
+```
+*Streams physical sensor packets to `http://localhost:5000/api/v1/telemetry/ingest`.*
 
 ---
 
-## 🛡️ Role-Based Access Control (RBAC)
+## 📡 ESP32 Circuit & Pinout Architecture (`sensors.ino`)
 
-| Role | Permissions |
-|---|---|
-| `super_admin` | Full platform control & cross-company management |
-| `company_admin` | Full company asset, user, device, & machine management |
-| `maintenance_engineer` | Create, update, configure machines, devices, & sensor thresholds |
-| `machine_operator` | Read-only access to dashboard, live telemetry, and machine status |
-
----
-
-## 📡 API Reference Summary
-
-### Authentication (`/api/v1/auth`)
-- `POST /register` — Register company & admin user
-- `POST /login` — Authenticate & receive access token
-- `POST /refresh` — Rotate refresh token
-- `POST /logout` — Invalidate session
-- `POST /forgot-password` — Request SMTP password reset email
-- `POST /reset-password` — Reset password via token
-
-### Machines (`/api/v1/machines`)
-- `GET /` — List machines (with search, status filter, plant/department filters, pagination)
-- `POST /` — Register new machine
-- `GET /:id` — Get machine details & assigned IoT device
-- `PUT /:id` — Update machine specifications
-- `DELETE /:id` — Delete machine
-- `POST /:id/image` — Upload machine image to Cloudinary
-- `POST /:id/device` — Assign ESP32 device to machine
-- `DELETE /:id/device` — Remove ESP32 device from machine
-
-### IoT Devices & Sensors (`/api/v1/devices`, `/api/v1/sensors`)
-- `GET /devices` — List registered devices & status
-- `POST /devices` — Register device (auto-provisions 6 sensors)
-- `GET /devices/:id` — Get device details & 6 connected sensors
-- `PUT /sensors/:id` — Update sensor sampling interval & alert thresholds
+| Sensor | Hardware Module | ESP32 Pin | Parameter Measured |
+|---|---|---|---|
+| Temperature | DHT22 / DS18B20 | GPIO 4 | Machine Surface Temp (°C) |
+| 3-Axis Acceleration | ADXL345 (I2C) | SDA (21), SCL (22) | Dynamic Vibration ($g$) |
+| Current Transducer | ACS712 (Analog) | VP (GPIO 36) | Motor Electrical Current (A) |
+| Speed / RPM | Optical Sensor / Tachometer | GPIO 18 | Shaft Rotational Speed (RPM) |
 
 ---
 
-## 🧰 Tech Stack
+## 🛡️ Security & Environment Best Practices
 
-**Frontend**
-- Next.js 15 (App Router) + TypeScript
-- Tailwind CSS v4
-- shadcn/ui components
-- Zustand (State Management)
-- React Hook Form + Zod validation
-- Socket.io Client (Real-time WebSockets)
-- Axios (HTTP client with auto-refresh interceptors)
+> **[IMPORTANT] Security Notice**:
+> - Never commit `.env` files or hardcoded MongoDB Atlas credentials (`mongodb+srv://`) to public repositories.
+> - Ensure all database URIs and JWT secrets are injected strictly via environment variables.
+> - Reference `.env.example` for variable schemas.
 
-**Backend**
-- Node.js + Express 5 + TypeScript
-- MongoDB Atlas / Mongoose 8
-- Socket.io (Real-time telemetry gateway)
-- JWT Authentication (Access + Refresh token rotation)
-- Cloudinary Storage (Image management)
-- Nodemailer SMTP (Email service)
+---
 
-**Python AI Service**
-- FastAPI + Uvicorn
-- XGBoost Regressors
-- scikit-learn (Isolation Forest Anomaly Detection)
-- pandas + numpy
-- pydantic v2
+## 🧰 Technology Stack
+
+- **Frontend**: Next.js 14/15 (App Router), TypeScript, Tailwind CSS, Lucide Icons, Recharts, Socket.io Client.
+- **Backend**: Node.js, Express 5, TypeScript, Mongoose 8, Socket.io, JWT Authentication, Winston Logger.
+- **AI Microservice**: Python 3.12, FastAPI, Uvicorn, XGBoost, scikit-learn, pandas, numpy.
+- **Hardware & IoT**: ESP32 Microcontroller, Arduino C++ (`sensors.ino`), Node.js SerialPort, MQTT.
 
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the MIT License. See `LICENSE` for details.
