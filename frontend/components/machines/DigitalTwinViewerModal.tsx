@@ -41,7 +41,7 @@ export function DigitalTwinViewerModal({
   const [isWireframe, setIsWireframe] = useState(false);
   const [autoRotate, setAutoRotate] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
-  const [bgStyle, setBgStyle] = useState<'dark' | 'slate' | 'deep' | 'gradient'>('dark');
+  const [bgStyle, setBgStyle] = useState<'dark' | 'slate' | 'deep' | 'gradient' | 'studio'>('dark');
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Future Ready Feature Placeholders State (Prepared Architecture)
@@ -79,6 +79,7 @@ export function DigitalTwinViewerModal({
     slate: 0x1e293b,
     deep: 0x030712,
     gradient: 0x0f172a,
+    studio: 0x334155,
   };
 
   // Reset Camera Position
@@ -121,6 +122,7 @@ export function DigitalTwinViewerModal({
       return next;
     });
   }, []);
+
   // Keyboard ESC listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -174,7 +176,7 @@ export function DigitalTwinViewerModal({
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    renderer.toneMappingExposure = 1.8;
     rendererRef.current = renderer;
 
     // 4. OrbitControls
@@ -188,22 +190,26 @@ export function DigitalTwinViewerModal({
     controls.autoRotateSpeed = 2.0;
     controlsRef.current = controls;
 
-    // 5. Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+    // 5. Bright Studio Lighting Setup
+    const ambientLight = new THREE.AmbientLight(0xffffff, 3.5);
     scene.add(ambientLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 2.5);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444455, 2.5);
+    hemiLight.position.set(0, 50, 0);
+    scene.add(hemiLight);
+
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 3.5);
     dirLight1.position.set(10, 20, 15);
     dirLight1.castShadow = true;
     scene.add(dirLight1);
 
-    const dirLight2 = new THREE.DirectionalLight(0x3b82f6, 1.5);
-    dirLight2.position.set(-10, -10, -10);
+    const dirLight2 = new THREE.DirectionalLight(0xffffff, 2.0);
+    dirLight2.position.set(-10, 10, -15);
     scene.add(dirLight2);
 
-    const pointLight = new THREE.PointLight(0x00f2fe, 2, 20);
-    pointLight.position.set(0, 5, 0);
-    scene.add(pointLight);
+    const dirLight3 = new THREE.DirectionalLight(0x38bdf8, 1.5);
+    dirLight3.position.set(0, -10, 0);
+    scene.add(dirLight3);
 
     // 6. Grid Helper & Axis Helper
     const gridHelper = new THREE.GridHelper(20, 20, 0x3b82f6, 0x1b1d2a);
@@ -228,6 +234,21 @@ export function DigitalTwinViewerModal({
     };
 
     const onModelLoaded = (object: THREE.Object3D) => {
+      // Optimize materials for brightness
+      object.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh;
+          if (mesh.material) {
+            const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            mats.forEach((mat: any) => {
+              if ('roughness' in mat && mat.roughness > 0.8) mat.roughness = 0.5;
+              if ('metalness' in mat && mat.metalness > 0.9) mat.metalness = 0.3;
+              mat.needsUpdate = true;
+            });
+          }
+        }
+      });
+
       modelGroup.add(object);
 
       // Center and scale model to fit view bounding box
@@ -446,50 +467,21 @@ export function DigitalTwinViewerModal({
           {/* Background Color Chooser (Bottom Right) */}
           <div className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 bg-[#0D0F1A]/80 backdrop-blur-md border border-[#1B1D2A] px-3 py-1.5 rounded-xl shadow-xl">
             <span className="text-[10px] uppercase font-mono text-[#64748B] mr-1">Theme</span>
-            {(['dark', 'slate', 'deep'] as const).map((theme) => (
+            {(['dark', 'slate', 'deep', 'gradient', 'studio'] as const).map((theme) => (
               <button
                 key={theme}
                 onClick={() => setBgStyle(theme)}
                 className={`w-5 h-5 rounded-full border transition-transform ${
-                  bgStyle === theme ? 'scale-115 ring-2 ring-cyan-400' : 'opacity-70 hover:opacity-100'
+                  bgStyle === theme ? 'scale-125 ring-2 ring-cyan-400' : 'opacity-70 hover:opacity-100'
                 } ${
                   theme === 'dark' ? 'bg-[#0A0B10] border-slate-700' :
-                  theme === 'slate' ? 'bg-[#1E293B] border-slate-600' : 'bg-[#030712] border-gray-800'
+                  theme === 'slate' ? 'bg-[#1E293B] border-slate-600' :
+                  theme === 'deep' ? 'bg-[#030712] border-gray-800' :
+                  theme === 'gradient' ? 'bg-[#0F172A] border-indigo-700' : 'bg-[#334155] border-slate-500'
                 }`}
                 title={`Background Theme: ${theme}`}
               />
             ))}
-          </div>
-
-          {/* Future Ready AI & Telemetry Overlay Bar (Bottom Left) */}
-          <div className="absolute bottom-4 left-4 z-10 flex flex-wrap gap-2 max-w-xl">
-            <div className="bg-[#0D0F1A]/90 backdrop-blur-md border border-[#1B1D2A] p-2 rounded-xl flex items-center gap-1.5 shadow-xl">
-              <span className="text-[10px] uppercase font-mono text-[#64748B] px-1">AI Overlays (Future)</span>
-
-              {[
-                { label: 'Live Telemetry', state: showSensorOverlay, setter: setShowSensorOverlay, Icon: Activity, color: 'text-cyan-400' },
-                { label: 'Heatmap', state: showHeatmap, setter: setShowHeatmap, Icon: Flame, color: 'text-amber-400' },
-                { label: 'Vibration', state: showVibrationHotspots, setter: setShowVibrationHotspots, Icon: Activity, color: 'text-purple-400' },
-                { label: 'Faults', state: showFaultHighlighting, setter: setShowFaultHighlighting, Icon: ShieldAlert, color: 'text-red-400' },
-                { label: 'RUL Markers', state: showRULVisualization, setter: setShowRULVisualization, Icon: Clock, color: 'text-emerald-400' },
-                { label: 'Animation', state: showMaintenanceAnimation, setter: setShowMaintenanceAnimation, Icon: Play, color: 'text-blue-400' },
-                { label: 'Labels', state: showComponentLabels, setter: setShowComponentLabels, Icon: Tag, color: 'text-yellow-400' },
-              ].map((item) => (
-                <button
-                  key={item.label}
-                  onClick={() => item.setter((prev) => !prev)}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all ${
-                    item.state
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                      : 'text-[#64748B] hover:text-[#94A3B8] hover:bg-[#1B1D2A]'
-                  }`}
-                  title={`${item.label} Overlay Placeholder`}
-                >
-                  <item.Icon className={`w-3 h-3 ${item.color}`} />
-                  {item.label}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
 
