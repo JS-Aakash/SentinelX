@@ -10,6 +10,55 @@ from sklearn.ensemble import IsolationForest
 
 TARGET_SENSORS = ["Temperature", "Vibration", "Current", "Voltage", "RPM", "Sound"]
 
+def extract_time_aware_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Generate time-aware sequence features per sensor:
+    - Lag features (t-1, t-2, t-5, t-10)
+    - Rolling window statistics (rolling mean 5/15, rolling std 5/15)
+    - Rate-of-change derivatives (diff1, diff5)
+    
+    If 'sequence_id' or 'dataset_id' is present (multi-dataset merged CSVs),
+    computes time-aware features within each sequence independently.
+    """
+    df_out = df.copy()
+
+    # Identify grouping column for multi-dataset boundaries
+    group_col = None
+    for col in ["sequence_id", "dataset_id", "source_dataset"]:
+        if col in df_out.columns:
+            group_col = col
+            break
+
+    for sensor in TARGET_SENSORS:
+        col_name = sensor if sensor in df_out.columns else next((c for c in df_out.columns if c.lower() == sensor.lower()), None)
+        if not col_name:
+            continue
+
+        if group_col:
+            grouped = df_out.groupby(group_col)[col_name]
+            df_out[f"{sensor}_lag1"] = grouped.shift(1)
+            df_out[f"{sensor}_lag2"] = grouped.shift(2)
+            df_out[f"{sensor}_lag5"] = grouped.shift(5)
+            df_out[f"{sensor}_rolling_mean_5"] = grouped.transform(lambda s: s.rolling(5, min_periods=1).mean())
+            df_out[f"{sensor}_rolling_mean_15"] = grouped.transform(lambda s: s.rolling(15, min_periods=1).mean())
+            df_out[f"{sensor}_rolling_std_5"] = grouped.transform(lambda s: s.rolling(5, min_periods=1).std()).fillna(0)
+            df_out[f"{sensor}_diff1"] = grouped.diff(1).fillna(0)
+            df_out[f"{sensor}_diff5"] = grouped.diff(5).fillna(0)
+        else:
+            s_series = df_out[col_name]
+            df_out[f"{sensor}_lag1"] = s_series.shift(1)
+            df_out[f"{sensor}_lag2"] = s_series.shift(2)
+            df_out[f"{sensor}_lag5"] = s_series.shift(5)
+            df_out[f"{sensor}_rolling_mean_5"] = s_series.rolling(5, min_periods=1).mean()
+            df_out[f"{sensor}_rolling_mean_15"] = s_series.rolling(15, min_periods=1).mean()
+            df_out[f"{sensor}_rolling_std_5"] = s_series.rolling(5, min_periods=1).std().fillna(0)
+            df_out[f"{sensor}_diff1"] = s_series.diff(1).fillna(0)
+            df_out[f"{sensor}_diff5"] = s_series.diff(5).fillna(0)
+
+    # Backfill & forward fill lag NaNs
+    df_out = df_out.bfill().ffill().fillna(0)
+    return df_out
+
 def train_machine_models(
     machine_id: str,
     dataset_path: str,
@@ -22,26 +71,30 @@ def train_machine_models(
     and 1 Isolation Forest model for anomaly detection.
     
     Each XGBoost regressor predicts ONLY its target sensor at [t+1], 
-    using the COMPLETE engineered feature set as input.
+    using the COMPLETE time-aware engineered feature set as input.
     """
     start_time = time.time()
     
     if not os.path.exists(dataset_path):
         raise FileNotFoundError(f"Engineered dataset file not found: {dataset_path}")
         
-    df = pd.read_csv(dataset_path)
-    if df.empty:
+    df_raw = pd.read_csv(dataset_path)
+    if df_raw.empty:
         raise ValueError("Engineered dataset file is empty")
+
+    # Extract time-aware sequential features (lags, rolling averages, derivatives)
+    df = extract_time_aware_features(df_raw)
         
-    # Drop timestamp from input features
-    feature_cols = [c for c in df.columns if c not in ["Timestamp", "timestamp"]]
+    # Drop timestamp and ID metadata from input features
+    non_feature_cols = ["Timestamp", "timestamp", "sequence_id", "dataset_id", "source_dataset"]
+    feature_cols = [c for c in df.columns if c not in non_feature_cols]
     
     if len(feature_cols) == 0:
         raise ValueError("No numeric feature columns found in dataset")
         
     X = df[feature_cols].copy()
     
-    # Fill any remaining NaNs with forward fill or 0
+    # Fill any remaining NaNs
     X = X.ffill().bfill().fillna(0)
     
     # Target creation: 1-step-ahead shift for each sensor

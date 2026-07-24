@@ -40,9 +40,6 @@ export const uploadDataset = asyncHandler(async (req: Request, res: Response): P
 
   const newVersion = latestDataset ? latestDataset.version + 1 : 1;
 
-  // Deactivate existing datasets if this is active
-  await Dataset.updateMany({ machineId: machine._id }, { isActive: false });
-
   const name = datasetName || `Dataset v${newVersion} (${file.originalname})`;
 
   const dataset = await Dataset.create({
@@ -193,6 +190,7 @@ export const generateFeatures = asyncHandler(async (req: Request, res: Response)
 
 export const activateDatasetVersion = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params as Record<string, string>;
+  const { isActive } = req.body as { isActive?: boolean };
   const companyId = req.user!.companyId.toString();
 
   const dataset = await Dataset.findOne({ _id: id, companyId }).exec();
@@ -200,11 +198,11 @@ export const activateDatasetVersion = asyncHandler(async (req: Request, res: Res
     throw ApiError.notFound('Dataset not found');
   }
 
-  await Dataset.updateMany({ machineId: dataset.machineId }, { isActive: false });
-  dataset.isActive = true;
+  // Toggle or set isActive status without wiping other datasets in the training pool
+  dataset.isActive = typeof isActive === 'boolean' ? isActive : !dataset.isActive;
   await dataset.save();
 
-  sendSuccess(res, `Dataset version ${dataset.version} set as active dataset`, dataset);
+  sendSuccess(res, `Dataset version v${dataset.version} ${dataset.isActive ? 'added to' : 'removed from'} active training pool`, dataset);
 });
 
 export const deleteDataset = asyncHandler(async (req: Request, res: Response): Promise<void> => {

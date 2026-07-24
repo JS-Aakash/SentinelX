@@ -14,6 +14,24 @@ TARGET_SENSORS = ["Temperature", "Vibration", "Current", "Voltage", "RPM", "Soun
 # Key: f"{machine_id}_v{version}" -> Dict of loaded models
 MODEL_CACHE: Dict[str, Dict[str, Any]] = {}
 
+# In-Memory Sliding Sequence Buffer for Time-Aware Live Inference
+# Key: machine_id -> List[Dict[str, float]] (last 30 telemetry readings)
+INFERENCE_SEQUENCE_BUFFER: Dict[str, List[Dict[str, float]]] = {}
+
+def update_sequence_buffer(machine_id: str, current_reading: Dict[str, float]) -> List[Dict[str, float]]:
+    """Maintain sliding window of last 30 telemetry readings for time-aware inference."""
+    global INFERENCE_SEQUENCE_BUFFER
+    if machine_id not in INFERENCE_SEQUENCE_BUFFER:
+        INFERENCE_SEQUENCE_BUFFER[machine_id] = []
+
+    clean_reading = {s: float(current_reading.get(s, 0.0)) for s in TARGET_SENSORS}
+    buffer = INFERENCE_SEQUENCE_BUFFER[machine_id]
+    buffer.append(clean_reading)
+    if len(buffer) > 30:
+        buffer.pop(0)
+
+    return buffer
+
 def clear_model_cache(machine_id: Optional[str] = None):
     """Clear model cache for a specific machine or all machines."""
     global MODEL_CACHE
@@ -120,23 +138,48 @@ def run_live_inference_and_forecast(
         "Sound": {"expected": 62.0, "unit": "dB"},
     }
 
-    # 2. Align feature vector to exact feature_cols order
-    if not feature_cols:
-        feature_cols = [k for k in feature_vector.keys() if k not in ["Timestamp", "timestamp"]]
+    # 2. Update sequence buffer & construct time-aware feature vector
+    buffer = update_sequence_buffer(machine_id, current_reading)
 
-    x_input = [float(feature_vector.get(c, 0.0)) for c in feature_cols]
+    # Build dynamic feature map combining current reading, lags, rolling statistics, and derivatives
+    feat_map = {k: float(v) for k, v in feature_vector.items()}
+    
+    # Overwrite/fill missing time-aware features from sliding sequence buffer
+    buf_df = pd.DataFrame(buffer)
+    for s in TARGET_SENSORS:
+        col = s if s in buf_df.columns else next((c for c in buf_df.columns if c.lower() == s.lower()), None)
+        if col:
+            s_vals = buf_df[col]
+            curr_val = float(s_vals.iloc[-1])
+            feat_map[s] = curr_val
+            feat_map[f"{s}_lag1"] = float(s_vals.iloc[-2]) if len(s_vals) >= 2 else curr_val
+            feat_map[f"{s}_lag2"] = float(s_vals.iloc[-3]) if len(s_vals) >= 3 else curr_val
+            feat_map[f"{s}_lag5"] = float(s_vals.iloc[-6]) if len(s_vals) >= 6 else curr_val
+            feat_map[f"{s}_rolling_mean_5"] = float(s_vals.tail(5).mean())
+            feat_map[f"{s}_rolling_mean_15"] = float(s_vals.tail(15).mean())
+            feat_map[f"{s}_rolling_std_5"] = float(s_vals.tail(5).std()) if len(s_vals) >= 2 else 0.0
+            feat_map[f"{s}_diff1"] = round(curr_val - float(s_vals.iloc[-2]), 3) if len(s_vals) >= 2 else 0.0
+            feat_map[f"{s}_diff5"] = round(curr_val - float(s_vals.iloc[-6]), 3) if len(s_vals) >= 6 else 0.0
+
+    if not feature_cols:
+        feature_cols = [k for k in feat_map.keys() if k not in ["Timestamp", "timestamp"]]
+
+    x_input = [float(feat_map.get(c, 0.0)) for c in feature_cols]
     df_curr = pd.DataFrame([x_input], columns=feature_cols)
 
-    # 3. Predict Next Step (t+1) for all 6 target sensors with History-Weighted Blending
-    # (Historical degradation baseline: 80% weight, ML prediction: 20% weight micro-adjustment)
+    # 3. Predict Next Step (t+1) for all 6 target sensors with Time-Aware Sequence Blending
     t1_predictions: Dict[str, float] = {}
     for sensor in TARGET_SENSORS:
         model = xgb_models[sensor]
         raw_pred = float(model.predict(df_curr)[0])
         hist_base = sensor_baselines.get(sensor, {}).get("expected", default_baselines[sensor]["expected"])
         
-        # History-Weighted Blending to prevent single-day volatility
-        blended_val = round(0.75 * raw_pred + 0.25 * hist_base, 3)
+        # Exponential Moving Average (EMA) & Time-Aware Sequence Blending
+        # 60% ML Sequence Model prediction + 25% Rolling Sequence Mean + 15% Baseline
+        s_col = sensor if sensor in buf_df.columns else next((c for c in buf_df.columns if c.lower() == sensor.lower()), None)
+        roll_mean = float(buf_df[s_col].tail(5).mean()) if s_col else raw_pred
+        
+        blended_val = round(0.60 * raw_pred + 0.25 * roll_mean + 0.15 * hist_base, 3)
         t1_predictions[sensor] = blended_val
 
     t_inf = time.time()

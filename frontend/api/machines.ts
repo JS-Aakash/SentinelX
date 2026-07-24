@@ -81,7 +81,7 @@ export const machinesApi = {
     link.remove();
   },
 
-  // Train AI Model from recorded live dataset
-  trainFromLiveDataset: (id: string) =>
-    api.post<ApiResponse<{ machine: Machine; aiModel: any }>>(`/machines/${id}/train-live`),
+  // Train AI Model from recorded live dataset & historical dataset batch
+  trainFromLiveDataset: (id: string, datasetIds?: string[]) =>
+    api.post<ApiResponse<{ machine: Machine; aiModel: any }>>(`/machines/${id}/train-live`, { datasetIds }),
 };

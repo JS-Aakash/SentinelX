@@ -23,22 +23,31 @@ export class AIService {
   /**
    * Train per-machine model suite (6 XGBoost Regressors + 1 Isolation Forest)
    */
-  public static async trainModel(machineId: string, userId: string, isRetrain = false): Promise<IAIModel> {
+  public static async trainModel(machineId: string, userId: string, isRetrain = false, datasetIds?: string[]): Promise<IAIModel> {
     const machine = await Machine.findById(machineId).exec();
     if (!machine) {
       throw ApiError.notFound('Machine not found');
     }
 
-    // 1. Combine all available historical datasets for machine (multi-period time-gap aware merging)
-    const datasets = await Dataset.find({ machineId }).exec();
+    // 1. Combine requested or available historical datasets for machine (multi-period time-gap aware merging)
+    let datasets: IDataset[] = [];
+    if (datasetIds && datasetIds.length > 0) {
+      datasets = await Dataset.find({ _id: { $in: datasetIds }, machineId }).exec();
+    } else {
+      datasets = await Dataset.find({ machineId, isActive: true }).exec();
+      if (datasets.length === 0) {
+        datasets = await Dataset.find({ machineId }).exec();
+      }
+    }
+
     if (datasets.length === 0) {
-      throw ApiError.badRequest('No historical datasets uploaded for this machine. Upload at least one dataset first.');
+      throw ApiError.badRequest('No historical datasets found for this machine. Upload at least one dataset first.');
     }
 
     let activeDataset: IDataset;
-    if (datasets.length > 1) {
-      logger.info(`Merging ${datasets.length} multi-period historical datasets for machine ${machineId}...`);
-      activeDataset = await DatasetService.combineMachineDatasets(machineId);
+    if (datasets.length > 1 || (datasetIds && datasetIds.length > 0)) {
+      logger.info(`Merging ${datasets.length} historical datasets for machine ${machineId}...`);
+      activeDataset = await DatasetService.combineMachineDatasets(machineId, datasetIds);
     } else {
       activeDataset = datasets[0].engineeredFilePath ? datasets[0] : await DatasetService.engineerFeatures(datasets[0]._id.toString());
     }

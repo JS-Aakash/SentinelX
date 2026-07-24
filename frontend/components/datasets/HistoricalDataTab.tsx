@@ -294,6 +294,20 @@ export function HistoricalDataTab({ machineId }: HistoricalDataTabProps) {
         </div>
       </div>
 
+      {/* Active Multi-Dataset Training Pool Banner */}
+      <div className="rounded-xl border border-[#00E676]/30 bg-[#00E676]/5 p-3.5 flex items-center justify-between font-mono text-xs text-[#00E676]">
+        <div className="flex items-center gap-2.5">
+          <Layers size={16} className="text-[#00E676]" />
+          <span>
+            <strong>ACTIVE MULTI-DATASET TRAINING POOL:</strong>{' '}
+            {datasets.filter((d) => d.isActive).length} dataset(s) marked active ({datasets.filter((d) => d.isActive).reduce((a, b) => a + (b.rowCount || 0), 0).toLocaleString()} combined telemetry rows)
+          </span>
+        </div>
+        <span className="text-[10px] uppercase font-bold bg-[#00E676]/20 px-2 py-0.5 rounded border border-[#00E676]/40">
+          Concatenating Time-Series Lags
+        </span>
+      </div>
+
       {/* ─── Actions Bar ─────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3 font-mono">
         <div className="flex items-center gap-2">
@@ -609,14 +623,25 @@ export function HistoricalDataTab({ machineId }: HistoricalDataTabProps) {
                       <td className="px-4 py-3 text-[#64748B] font-mono">{formatDate(ds.createdAt)}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {!ds.isActive && (
-                            <button
-                              onClick={() => handleActivateVersion(ds._id)}
-                              className="px-2.5 py-1 rounded bg-[#161926] border border-[#2B324B] text-[10px] font-bold text-[#00F2FE] hover:bg-[#1E2336]"
-                            >
-                              MAKE ACTIVE
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleActivateVersion(ds._id)}
+                            className={cn(
+                              "px-2.5 py-1 rounded text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer",
+                              ds.isActive
+                                ? "bg-[#00E676]/15 border-[#00E676]/30 text-[#00E676] hover:bg-[#00E676]/25"
+                                : "bg-[#161926] border-[#2B324B] text-[#94A3B8] hover:text-white hover:border-[#38BDF8]"
+                            )}
+                            title={ds.isActive ? "Click to remove from active multi-dataset training pool" : "Click to include in active multi-dataset training pool"}
+                          >
+                            {ds.isActive ? (
+                              <>
+                                <Check size={11} className="text-[#00E676]" />
+                                IN TRAINING POOL
+                              </>
+                            ) : (
+                              '+ INCLUDE IN POOL'
+                            )}
+                          </button>
 
                           {/* Downloads */}
                           <a

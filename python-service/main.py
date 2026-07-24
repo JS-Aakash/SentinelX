@@ -33,6 +33,7 @@ class TrainModelRequest(BaseModel):
     model_version: int
     output_dir: Optional[str] = "models"
     operating_limits: Optional[Dict[str, float]] = None
+    dataset_ids: Optional[List[str]] = None
 
 class PredictRequest(BaseModel):
     machine_id: str

@@ -315,7 +315,7 @@ export class InferenceService {
         modelVersion: 1,
         datasetVersion: 1,
         isActive: true,
-        status: 'active',
+        status: 'ready',
         modelDir: 'models',
         featureNames: ['Temperature', 'Vibration', 'Current', 'Voltage', 'RPM', 'Sound'],
       });

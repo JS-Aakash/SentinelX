@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-export type AIModelStatus = 'not_trained' | 'training' | 'ready' | 'failed';
+export type AIModelStatus = 'not_trained' | 'training' | 'ready' | 'active' | 'failed';
 
 export interface ITrainingReport {
   totalRows: number;
@@ -51,7 +51,7 @@ const AIModelSchema = new Schema<IAIModel>(
     datasetId: {
       type: Schema.Types.ObjectId,
       ref: 'Dataset',
-      required: true,
+      required: false,
     },
     datasetVersion: {
       type: Number,
@@ -69,7 +69,7 @@ const AIModelSchema = new Schema<IAIModel>(
     },
     status: {
       type: String,
-      enum: ['not_trained', 'training', 'ready', 'failed'],
+      enum: ['not_trained', 'training', 'ready', 'active', 'failed'],
       default: 'not_trained',
     },
     modelDir: {
@@ -100,7 +100,7 @@ const AIModelSchema = new Schema<IAIModel>(
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: false,
     },
   },
   {

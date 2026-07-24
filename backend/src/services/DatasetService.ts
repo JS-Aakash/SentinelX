@@ -658,9 +658,6 @@ export class DatasetService {
 
     const { report, startDate, endDate, samplingInterval } = this.validateRawRows(rawRows);
 
-    // Deactivate previous active datasets
-    await Dataset.updateMany({ machineId: machine._id }, { isActive: false });
-
     const latest = await Dataset.findOne({ machineId: machine._id }).sort({ version: -1 }).exec();
     const newVersion = latest ? latest.version + 1 : 1;
 

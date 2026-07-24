@@ -208,12 +208,16 @@ export const trainFromLiveDataset = asyncHandler(async (req: Request, res: Respo
   machine.aiLifecycleStatus = AILifecycleStatus.TRAINING;
   await machine.save();
 
+  const { datasetIds } = req.body as { datasetIds?: string[] };
+
   try {
-    // 1. Convert live recorded CSV into engineered Dataset document
-    await DatasetService.registerDatasetFromLiveRecording(machine._id.toString(), req.user!.userId);
+    // 1. Convert live recorded CSV into engineered Dataset document if present
+    try {
+      await DatasetService.registerDatasetFromLiveRecording(machine._id.toString(), req.user!.userId);
+    } catch {}
 
     // 2. Train per-machine model suite (XGBoost + Isolation Forest)
-    const aiModel = await AIService.trainModel(machine._id.toString(), req.user!.userId);
+    const aiModel = await AIService.trainModel(machine._id.toString(), req.user!.userId, false, datasetIds);
 
     // 3. Update machine state to ai_ready
     machine.aiLifecycleStatus = AILifecycleStatus.AI_READY;

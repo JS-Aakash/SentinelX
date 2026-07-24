@@ -8,7 +8,7 @@ import { sendSuccess, sendCreated } from '../utils/ApiResponse';
 import { ApiError } from '../utils/ApiError';
 
 export const trainModel = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const { machineId } = req.body as Record<string, string>;
+  const { machineId, datasetIds } = req.body as { machineId: string; datasetIds?: string[] };
 
   if (!machineId) {
     throw ApiError.badRequest('machineId is required');
@@ -20,12 +20,12 @@ export const trainModel = asyncHandler(async (req: Request, res: Response): Prom
     throw ApiError.notFound('Machine not found');
   }
 
-  const model = await AIService.trainModel(machineId, req.user!.userId.toString(), false);
+  const model = await AIService.trainModel(machineId, req.user!.userId.toString(), false, datasetIds);
   sendCreated(res, `AI Model version v${model.modelVersion} trained successfully`, model);
 });
 
 export const retrainModel = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const { machineId } = req.body as Record<string, string>;
+  const { machineId, datasetIds } = req.body as { machineId: string; datasetIds?: string[] };
 
   if (!machineId) {
     throw ApiError.badRequest('machineId is required');
@@ -37,7 +37,7 @@ export const retrainModel = asyncHandler(async (req: Request, res: Response): Pr
     throw ApiError.notFound('Machine not found');
   }
 
-  const model = await AIService.trainModel(machineId, req.user!.userId.toString(), true);
+  const model = await AIService.trainModel(machineId, req.user!.userId.toString(), true, datasetIds);
   sendCreated(res, `AI Model version v${model.modelVersion} retrained successfully`, model);
 });
 

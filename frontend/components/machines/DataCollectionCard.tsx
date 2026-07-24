@@ -23,6 +23,8 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
   const [training, setTraining] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [availableDatasets, setAvailableDatasets] = useState<any[]>([]);
+  const [selectedDatasetIds, setSelectedDatasetIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!machine.isRecording) return;
@@ -31,6 +33,20 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
     }, 2500);
     return () => clearInterval(interval);
   }, [machine.isRecording, onRefresh]);
+
+  useEffect(() => {
+    const fetchDatasets = async () => {
+      try {
+        const res = await import('@/api/datasets').then(m => m.datasetsApi.getByMachine(machine._id || machine.id));
+        if (res.data.success && res.data.data) {
+          setAvailableDatasets(res.data.data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchDatasets();
+  }, [machine._id, machine.id]);
 
   const stats = machine.liveDataCollection || {
     collectedSampleCount: 0,
@@ -45,10 +61,19 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
   const isReadyForTraining = sampleCount >= threshold;
   const isRetrainingRecommended = machine.aiLifecycleStatus === 'retraining_recommended';
 
+  const handleToggleDataset = (id: string) => {
+    setSelectedDatasetIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
   const handleTrainModel = async () => {
     setTraining(true);
     try {
-      await machinesApi.trainFromLiveDataset(machine._id || machine.id);
+      await machinesApi.trainFromLiveDataset(
+        machine._id || machine.id,
+        selectedDatasetIds.length > 0 ? selectedDatasetIds : undefined
+      );
       if (onRefresh) onRefresh();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to train model');
@@ -196,6 +221,52 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
           </span>
         </div>
       </div>
+
+      {/* Multi-Dataset Selection Panel */}
+      {availableDatasets.length > 0 && (
+        <div className="bg-[#0E101B] p-4 rounded-2xl border border-[#1C2034] space-y-3 relative z-10 font-mono">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <Database size={14} className="text-[#38BDF8]" />
+              SELECT TRAINING DATASETS (TIME-AWARE SEQUENCE POOLING)
+            </span>
+            <span className="text-[10px] text-[#38BDF8] bg-[#38BDF8]/10 px-2 py-0.5 rounded border border-[#38BDF8]/20 font-bold">
+              {selectedDatasetIds.length === 0 ? 'All Datasets Merged' : `${selectedDatasetIds.length} Selected`}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            {availableDatasets.map((d) => {
+              const isChecked = selectedDatasetIds.includes(d._id);
+              return (
+                <div
+                  key={d._id}
+                  onClick={() => handleToggleDataset(d._id)}
+                  className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                    isChecked
+                      ? 'bg-[#121A30] border-[#38BDF8] text-white shadow-[0_0_10px_rgba(56,189,248,0.2)]'
+                      : 'bg-[#121626] border-[#202740] text-[#94A3B8] hover:border-[#2B3555]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {}}
+                      className="rounded border-[#2B3555] bg-[#0E101B] text-[#38BDF8] focus:ring-0 cursor-pointer"
+                    />
+                    <div>
+                      <span className="font-bold block text-[11px] text-white">{d.datasetName || `Dataset v${d.version}`}</span>
+                      <span className="text-[9px] text-[#64748B] block">{(d.rowCount || 0).toLocaleString()} rows · {d.status}</span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold text-[#38BDF8]">v{d.version}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Action Buttons Ribbon */}
       <div className="flex items-center justify-between gap-3 pt-1 flex-wrap relative z-10 font-mono">

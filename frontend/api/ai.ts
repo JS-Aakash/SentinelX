@@ -120,11 +120,11 @@ export interface AIDashboardResponse {
 }
 
 export const aiApi = {
-  train: (machineId: string) =>
-    api.post<ApiResponse<AIModelItem>>('/ai/train', { machineId }),
+  train: (machineId: string, datasetIds?: string[]) =>
+    api.post<ApiResponse<AIModelItem>>('/ai/train', { machineId, datasetIds }),
 
-  retrain: (machineId: string) =>
-    api.post<ApiResponse<AIModelItem>>('/ai/retrain', { machineId }),
+  retrain: (machineId: string, datasetIds?: string[]) =>
+    api.post<ApiResponse<AIModelItem>>('/ai/retrain', { machineId, datasetIds }),
 
   getStatus: (machineId: string) =>
     api.get<ApiResponse<AIModelStatusResponse>>(`/ai/status/${machineId}`),
