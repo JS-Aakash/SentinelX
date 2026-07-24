@@ -29,6 +29,7 @@ export function DigitalTwinViewerModal({
   digitalTwin,
 }: DigitalTwinViewerModalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
 
   // Viewer State
   const [loading, setLoading] = useState(true);
@@ -119,6 +120,16 @@ export function DigitalTwinViewerModal({
       return next;
     });
   }, []);
+  // Keyboard ESC listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   // Toggle Fullscreen
   const handleToggleFullscreen = useCallback(() => {
@@ -134,13 +145,13 @@ export function DigitalTwinViewerModal({
 
   // Initialize Three.js Scene
   useEffect(() => {
-    if (!isOpen || !containerRef.current || !modelUrl) return;
+    if (!isOpen || !canvasContainerRef.current || !modelUrl) return;
 
     setLoading(true);
     setProgress(0);
     setError(null);
 
-    const container = containerRef.current;
+    const container = canvasContainerRef.current;
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 500;
 
@@ -280,9 +291,9 @@ export function DigitalTwinViewerModal({
 
     // Resize Handler
     const handleResize = () => {
-      if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
-      const w = containerRef.current.clientWidth;
-      const h = containerRef.current.clientHeight;
+      if (!canvasContainerRef.current || !rendererRef.current || !cameraRef.current) return;
+      const w = canvasContainerRef.current.clientWidth;
+      const h = canvasContainerRef.current.clientHeight;
       cameraRef.current.aspect = w / h;
       cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(w, h);
@@ -315,7 +326,12 @@ export function DigitalTwinViewerModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 animate-fade-in">
+    <div
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
         ref={containerRef}
         className={`relative w-full max-w-6xl h-[85vh] bg-[#0A0B10] border border-[#1B1D2A] rounded-2xl overflow-hidden shadow-2xl flex flex-col ${
@@ -354,16 +370,16 @@ export function DigitalTwinViewerModal({
             </button>
             <button
               onClick={onClose}
-              className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all"
-              title="Close 3D Viewer"
+              className="p-2.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 transition-all flex items-center gap-1.5 font-semibold text-xs shadow-lg"
+              title="Close 3D Viewer (Esc)"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" /> Close
             </button>
           </div>
         </div>
 
         {/* ─── 3D Canvas Area ────────────────────────────────────────── */}
-        <div className="relative flex-1 bg-[#0A0B10] overflow-hidden">
+        <div ref={canvasContainerRef} className="relative flex-1 bg-[#0A0B10] overflow-hidden">
           {/* Loading Overlay */}
           {loading && (
             <div className="absolute inset-0 bg-[#0A0B10]/90 backdrop-blur-sm z-20 flex flex-col items-center justify-center gap-3">

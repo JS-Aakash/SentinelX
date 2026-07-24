@@ -2,13 +2,14 @@
 
 import { useState, useRef, ChangeEvent, DragEvent } from 'react';
 import {
-  Box, UploadCloud, CheckCircle2, Trash2, RefreshCw, Eye,
+  Box, UploadCloud, CheckCircle2, Trash2, RefreshCw, Eye, Maximize,
   FileCode, Layers, Info, AlertTriangle, HardDrive, Calendar, User as UserIcon,
   Sparkles,
 } from 'lucide-react';
 import { Machine, DigitalTwin } from '@/types';
 import { machinesApi } from '@/api/machines';
 import { DigitalTwinViewerModal } from './DigitalTwinViewerModal';
+import { Inline3DViewer } from './Inline3DViewer';
 
 interface DigitalTwinCardProps {
   machine: Machine;
@@ -212,72 +213,53 @@ export function DigitalTwinCard({ machine, canWrite, onUpdate }: DigitalTwinCard
             </div>
           </div>
         ) : (
-          /* ─── AFTER UPLOAD STATE: Model Metadata & Action Buttons ────────── */
-          <div className="space-y-4">
-            {/* Success Banner */}
-            <div className="flex items-center justify-between p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-medium">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={16} />
-                <span className="font-bold">✓ Model Uploaded Successfully</span>
-              </div>
-              <span className="font-mono text-[11px] bg-emerald-500/20 px-2 py-0.5 rounded-md text-emerald-300">
-                Ready for Digital Twin Visualization
-              </span>
-            </div>
+          /* ─── AFTER UPLOAD STATE: Live 3D Model Canvas + Metadata & Controls ─── */
+          <div className="space-y-3">
+            {/* Live 3D Model Rendered Directly On Page */}
+            <Inline3DViewer digitalTwin={digitalTwin} heightClass="h-44 sm:h-48" />
 
-            {/* Metadata Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 bg-[oklch(0.10_0.006_240)] border border-[oklch(0.20_0.01_240)] p-4 rounded-xl">
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-mono text-[#64748B] block">File Name</span>
-                <p className="text-xs font-medium text-white truncate" title={digitalTwin.modelName || ''}>
+            {/* Compact Metadata Grid */}
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 bg-[oklch(0.10_0.006_240)] border border-[oklch(0.20_0.01_240)] p-2.5 rounded-xl text-center">
+              <div>
+                <span className="text-[9px] uppercase font-mono text-[#64748B] block">Format</span>
+                <span className="text-xs font-mono font-bold text-purple-400">{digitalTwin.modelFormat || 'GLB'}</span>
+              </div>
+              <div>
+                <span className="text-[9px] uppercase font-mono text-[#64748B] block">Size</span>
+                <span className="text-xs font-mono font-semibold text-cyan-400">{formatFileSize(digitalTwin.modelSize)}</span>
+              </div>
+              <div>
+                <span className="text-[9px] uppercase font-mono text-[#64748B] block">Version</span>
+                <span className="text-xs font-mono font-semibold text-emerald-400">v{digitalTwin.version || 1}</span>
+              </div>
+              <div>
+                <span className="text-[9px] uppercase font-mono text-[#64748B] block">File Name</span>
+                <span className="text-xs text-white truncate block font-medium" title={digitalTwin.modelName || ''}>
                   {digitalTwin.modelName || '3d_model'}
-                </p>
+                </span>
               </div>
-
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-mono text-[#64748B] block">File Size</span>
-                <p className="text-xs font-mono text-cyan-400 font-semibold">
-                  {formatFileSize(digitalTwin.modelSize)}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-mono text-[#64748B] block">Format</span>
-                <p className="text-xs font-mono font-bold text-purple-400">
-                  {digitalTwin.modelFormat || 'GLB'}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-mono text-[#64748B] block">Version</span>
-                <p className="text-xs font-mono font-semibold text-emerald-400">
-                  v{digitalTwin.version || 1}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-mono text-[#64748B] block">Upload Date</span>
-                <p className="text-xs text-[#94A3B8]">
+              <div>
+                <span className="text-[9px] uppercase font-mono text-[#64748B] block">Date</span>
+                <span className="text-xs text-[#94A3B8]">
                   {digitalTwin.uploadedAt ? new Date(digitalTwin.uploadedAt).toLocaleDateString() : '—'}
-                </p>
+                </span>
               </div>
-
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-mono text-[#64748B] block">Uploaded By</span>
-                <p className="text-xs text-[#94A3B8] truncate" title={uploadedByName}>
+              <div>
+                <span className="text-[9px] uppercase font-mono text-[#64748B] block">Uploaded By</span>
+                <span className="text-xs text-[#94A3B8] truncate block" title={uploadedByName}>
                   {uploadedByName}
-                </p>
+                </span>
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap pt-1">
               <button
                 type="button"
                 onClick={() => setShowViewer(true)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold shadow-lg shadow-cyan-500/20 transition-all"
+                className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold shadow-md shadow-cyan-500/20 transition-all"
               >
-                <Eye size={15} /> View 3D Model
+                <Maximize size={14} /> Fullscreen 3D Studio
               </button>
 
               {canWrite && (
@@ -294,20 +276,20 @@ export function DigitalTwinCard({ machine, canWrite, onUpdate }: DigitalTwinCard
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#1B1D2A] border border-[#2A2D3E] hover:border-cyan-500/50 text-[#94A3B8] hover:text-white text-xs font-medium transition-all disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1B1D2A] border border-[#2A2D3E] hover:border-cyan-500/50 text-[#94A3B8] hover:text-white text-xs font-medium transition-all disabled:opacity-50"
                   >
-                    <RefreshCw size={14} className={uploading ? 'animate-spin' : ''} />
-                    {uploading ? 'Replacing...' : 'Replace Model'}
+                    <RefreshCw size={13} className={uploading ? 'animate-spin' : ''} />
+                    {uploading ? 'Replacing...' : 'Replace'}
                   </button>
 
                   <button
                     type="button"
                     onClick={handleDelete}
                     disabled={deleting}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 text-xs font-medium transition-all disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 text-xs font-medium transition-all disabled:opacity-50"
                   >
-                    <Trash2 size={14} />
-                    {deleting ? 'Deleting...' : 'Delete Model'}
+                    <Trash2 size={13} />
+                    {deleting ? 'Deleting...' : 'Delete'}
                   </button>
                 </>
               )}
