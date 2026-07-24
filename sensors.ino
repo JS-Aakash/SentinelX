@@ -24,7 +24,7 @@ float rpm = 0;
 // ---------- Voltage ----------
 float voltage = 0;
 
-// ---------- Current (RMS + Smooth Filter) ----------
+// ---------- Current (RMS + Auto-Calibrated) ----------
 float current = 0;  
 
 // ---------- Sound ----------
@@ -46,26 +46,51 @@ void IRAM_ATTR countPulse()
 
 #define ACS712_SENS_MV_PER_A   66.0f   // 66 mV/A for 30A model (use 100.0f for 20A, 185.0f for 5A)
 
-// Auto-calibrated zero-current baseline voltage (in mV)
-float zeroMilliVolts = 2500.0f;
+// Calibration Constants
+float zeroADC = 2048.0f;
+float zeroMilliVolts = 1650.0f;
 float currentFiltered = 0.0f;
+
+float readRawADC()
+{
+    uint32_t acc = 0;
+    for (int i = 0; i < 64; i++)
+    {
+        acc += analogRead(CURRENT_PIN);
+    }
+    return (float)acc / 64.0f;
+}
 
 void calibrateZeroAndNoise()
 {
-    Serial.println("Calibrating current sensor zero offset (ensure load is OFF)...");
-    const int N = 600;
-    double sumMv = 0;
+    Serial.println();
+    Serial.println("==========================================");
+    Serial.println(" 🔧 Calibrating Current Sensor (ACS712)... ");
+    Serial.println(" ⚠️ Ensure load/motor is OFF during boot ");
+    Serial.println("==========================================");
 
-    for (int i = 0; i < N; i++)
+    double accADC = 0;
+    const int SAMPLES = 1000;
+
+    for (int i = 0; i < SAMPLES; i++)
     {
-        sumMv += analogReadMilliVolts(CURRENT_PIN);
+        accADC += readRawADC();
+        if (i % 250 == 0)
+        {
+            Serial.printf(" Calibrating... %d%%\n", (i * 100) / SAMPLES);
+        }
         delay(2);
     }
 
-    zeroMilliVolts = (float)(sumMv / N);
+    zeroADC = (float)(accADC / SAMPLES);
+    zeroMilliVolts = (zeroADC / 4095.0f) * 3300.0f;
     currentFiltered = 0.0f;
 
-    Serial.printf("✅ Calibrated Zero Voltage: %.2f mV | Sensitivity: %.1f mV/A\n", zeroMilliVolts, ACS712_SENS_MV_PER_A);
+    Serial.println("==========================================");
+    Serial.printf(" ✅ Calibration Complete!\n");
+    Serial.printf("   Zero Baseline ADC : %.2f / 4095\n", zeroADC);
+    Serial.printf("   Zero Baseline mV  : %.2f mV\n", zeroMilliVolts);
+    Serial.println("==========================================\n");
 }
 
 float updateCurrentReading()
@@ -77,11 +102,13 @@ float updateCurrentReading()
 
     while (millis() - start < 80)
     {
-        float mv = (float)analogReadMilliVolts(CURRENT_PIN);
-        float diffMv = mv - zeroMilliVolts;
+        float currentADC = readRawADC();
+        float currentMv = (currentADC / 4095.0f) * 3300.0f;
+        float diffMv = currentMv - zeroMilliVolts;
+
         sumSqDiffMv += (diffMv * diffMv);
         samples++;
-        delayMicroseconds(400);
+        delayMicroseconds(300);
     }
 
     if (samples == 0) return currentFiltered;
@@ -89,15 +116,17 @@ float updateCurrentReading()
     float rmsMv = sqrt(sumSqDiffMv / samples);
     float rawCurrentA = rmsMv / ACS712_SENS_MV_PER_A;
 
-    // Small noise floor threshold (suppress ADC thermal noise under 0.025 A / 25 mA)
-    if (rawCurrentA < 0.025f) {
+    // Filter small noise under 15 mA (0.015 A)
+    if (rawCurrentA < 0.015f)
+    {
         rawCurrentA = 0.0f;
     }
 
-    // Smooth output using responsive Exponential Moving Average (Alpha Filter = 0.20)
-    currentFiltered = 0.80f * currentFiltered + 0.20f * rawCurrentA;
+    // Smooth output using responsive Alpha Filter (25% new, 75% old)
+    currentFiltered = (0.75f * currentFiltered) + (0.25f * rawCurrentA);
 
-    if (currentFiltered < 0.015f) {
+    if (currentFiltered < 0.01f)
+    {
         currentFiltered = 0.0f;
     }
 
@@ -157,7 +186,6 @@ void setup()
     delay(1000);
     calibrateZeroAndNoise();
 
-    Serial.println();
     Serial.println("==============================");
     Serial.println(" SentinelX Started ");
     Serial.println("==============================");
@@ -239,7 +267,7 @@ void loop()
     Serial.println(" A");
 
     Serial.print("Zero MV     : ");
-    Serial.print(zeroMilliVolts, 2);
+    Serial.print(zeroMilliVolts, 1);
     Serial.println(" mV");
 
     Serial.print("Sound ADC   : ");
