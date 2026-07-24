@@ -226,100 +226,105 @@ export default function MachineDetailClient({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* ─── Machine Image + Hero ─────────────────────────────────────────── */}
-      <div className="glass rounded-2xl p-5 lg:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-6 border border-[oklch(0.20_0.01_240)]">
-        {/* Image Card - Fixed Ratio Container matching MachineCard */}
-        <div className="relative w-full sm:w-64 md:w-72 h-44 sm:h-48 rounded-xl overflow-hidden shrink-0 border border-[oklch(0.22_0.01_240)] bg-gradient-to-br from-[oklch(0.13_0.008_240)] to-[oklch(0.10_0.006_240)] shadow-lg">
-          {machine.image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={machine.image}
-              alt={machine.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-              <Cpu size={48} className="text-[oklch(0.28_0.01_240)]" />
-              <span className="text-[10px] text-[oklch(0.40_0.01_240)] uppercase tracking-wider font-medium">No Image</span>
-            </div>
-          )}
-
-          {/* Status Overlay Badge */}
-          <div className="absolute top-2.5 right-2.5">
-            <MachineStatusBadge status={machine.status} size="sm" />
-          </div>
-
-          {/* Type Chip */}
-          <div className="absolute bottom-2.5 left-2.5">
-            <span className="inline-flex items-center gap-1 rounded-md bg-black/60 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-white/80">
-              <Tag size={9} />
-              {machine.type}
-            </span>
-          </div>
-
-          {canWrite && (
-            <label className="absolute bottom-2.5 right-2.5 cursor-pointer">
-              <div className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-sm hover:bg-black/90 text-white text-[10px] px-2.5 py-1 transition-colors font-medium">
-                {imageUploading ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
-                {imageUploading ? 'Uploading...' : 'Change'}
+      {/* ─── Machine Image + Hero + Digital Twin 3D ─────────────────────── */}
+      <div className="glass rounded-2xl p-5 lg:p-6 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 border border-[oklch(0.20_0.01_240)]">
+        {/* Left & Center: Image + Machine Information */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-1 min-w-0">
+          {/* Image Card - Fixed Ratio Container matching MachineCard */}
+          <div className="relative w-full sm:w-64 md:w-72 h-44 sm:h-48 rounded-xl overflow-hidden shrink-0 border border-[oklch(0.22_0.01_240)] bg-gradient-to-br from-[oklch(0.13_0.008_240)] to-[oklch(0.10_0.006_240)] shadow-lg">
+            {machine.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={machine.image}
+                alt={machine.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                <Cpu size={48} className="text-[oklch(0.28_0.01_240)]" />
+                <span className="text-[10px] text-[oklch(0.40_0.01_240)] uppercase tracking-wider font-medium">No Image</span>
               </div>
-              <input type="file" accept="image/*" onChange={handleImageUpload} className="sr-only" disabled={imageUploading} />
-            </label>
-          )}
-        </div>
+            )}
 
-        {/* Info Content */}
-        <div className="flex-1 min-w-0 space-y-3">
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-xs font-bold text-[oklch(0.62_0.20_240)] tracking-wider px-2 py-0.5 rounded bg-[oklch(0.52_0.24_240/0.12)] border border-[oklch(0.52_0.24_240/0.25)]">
-                {machine.machineCode}
+            {/* Status Overlay Badge */}
+            <div className="absolute top-2.5 right-2.5">
+              <MachineStatusBadge status={machine.status} size="sm" />
+            </div>
+
+            {/* Type Chip */}
+            <div className="absolute bottom-2.5 left-2.5">
+              <span className="inline-flex items-center gap-1 rounded-md bg-black/60 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-white/80">
+                <Tag size={9} />
+                {machine.type}
               </span>
-              {machine.manufacturer && (
-                <span className="text-xs text-[oklch(0.55_0.01_240)] font-medium">
-                  by {machine.manufacturer}
+            </div>
+
+            {canWrite && (
+              <label className="absolute bottom-2.5 right-2.5 cursor-pointer">
+                <div className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-sm hover:bg-black/90 text-white text-[10px] px-2.5 py-1 transition-colors font-medium">
+                  {imageUploading ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
+                  {imageUploading ? 'Uploading...' : 'Change'}
+                </div>
+                <input type="file" accept="image/*" onChange={handleImageUpload} className="sr-only" disabled={imageUploading} />
+              </label>
+            )}
+          </div>
+
+          {/* Info Content */}
+          <div className="flex-1 min-w-0 space-y-3">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-xs font-bold text-[oklch(0.62_0.20_240)] tracking-wider px-2 py-0.5 rounded bg-[oklch(0.52_0.24_240/0.12)] border border-[oklch(0.52_0.24_240/0.25)]">
+                  {machine.machineCode}
+                </span>
+                {machine.manufacturer && (
+                  <span className="text-xs text-[oklch(0.55_0.01_240)] font-medium">
+                    by {machine.manufacturer}
+                  </span>
+                )}
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-white mt-1.5 leading-tight">
+                {machine.name}
+              </h2>
+              {machine.modelNumber && (
+                <p className="text-xs text-[oklch(0.50_0.01_240)] mt-0.5">
+                  Model: <span className="text-white font-mono">{machine.modelNumber}</span>
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-4 text-xs text-[oklch(0.50_0.01_240)] pt-2 border-t border-[oklch(0.17_0.008_240)]">
+              {(machine.plant || machine.department) && (
+                <span className="flex items-center gap-1.5 text-[oklch(0.60_0.01_240)]">
+                  <MapPin size={13} className="text-[oklch(0.75_0.18_200)] shrink-0" />
+                  {[machine.department, machine.plant].filter(Boolean).join(' · ')}
+                </span>
+              )}
+              {machine.installationDate && (
+                <span className="flex items-center gap-1.5 text-[oklch(0.60_0.01_240)]">
+                  <Calendar size={13} className="text-[oklch(0.75_0.18_200)] shrink-0" />
+                  Installed {formatDate(machine.installationDate)}
                 </span>
               )}
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-white mt-1.5 leading-tight">
-              {machine.name}
-            </h2>
-            {machine.modelNumber && (
-              <p className="text-xs text-[oklch(0.50_0.01_240)] mt-0.5">
-                Model: <span className="text-white font-mono">{machine.modelNumber}</span>
-              </p>
+
+            {machine.tags?.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {machine.tags.map((tag) => (
+                  <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-[oklch(0.52_0.24_240/0.12)] border border-[oklch(0.52_0.24_240/0.25)] text-[oklch(0.62_0.20_240)] text-[10px] px-2.5 py-0.5 font-medium">
+                    <Tag size={9} />{tag}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
+        </div>
 
-          <div className="flex flex-wrap gap-4 text-xs text-[oklch(0.50_0.01_240)] pt-2 border-t border-[oklch(0.17_0.008_240)]">
-            {(machine.plant || machine.department) && (
-              <span className="flex items-center gap-1.5 text-[oklch(0.60_0.01_240)]">
-                <MapPin size={13} className="text-[oklch(0.75_0.18_200)] shrink-0" />
-                {[machine.department, machine.plant].filter(Boolean).join(' · ')}
-              </span>
-            )}
-            {machine.installationDate && (
-              <span className="flex items-center gap-1.5 text-[oklch(0.60_0.01_240)]">
-                <Calendar size={13} className="text-[oklch(0.75_0.18_200)] shrink-0" />
-                Installed {formatDate(machine.installationDate)}
-              </span>
-            )}
-          </div>
-
-          {machine.tags?.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {machine.tags.map((tag) => (
-                <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-[oklch(0.52_0.24_240/0.12)] border border-[oklch(0.52_0.24_240/0.25)] text-[oklch(0.62_0.20_240)] text-[10px] px-2.5 py-0.5 font-medium">
-                  <Tag size={9} />{tag}
-                </span>
-              ))}
-            </div>
-          )}
+        {/* Right: Machine Digital Twin 3D Section */}
+        <div className="w-full xl:w-[480px] shrink-0 border-t xl:border-t-0 xl:border-l border-[oklch(0.20_0.01_240)] pt-5 xl:pt-0 xl:pl-6">
+          <DigitalTwinCard machine={machine} canWrite={canWrite} onUpdate={() => fetchMachine(id)} />
         </div>
       </div>
-
-      {/* ─── Machine Digital Twin (3D Model) Section ────────────────────────── */}
-      <DigitalTwinCard machine={machine} canWrite={canWrite} onUpdate={() => fetchMachine(id)} />
 
       {/* ─── Live Data Acquisition & Recording Control Card ──────────────── */}
       <DataCollectionCard machine={machine} onRefresh={() => fetchMachine(id)} />

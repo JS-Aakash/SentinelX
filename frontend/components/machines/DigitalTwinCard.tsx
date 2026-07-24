@@ -109,7 +109,7 @@ export function DigitalTwinCard({ machine, canWrite, onUpdate }: DigitalTwinCard
 
   return (
     <>
-      <div className="glass rounded-xl p-5 border border-[oklch(0.20_0.01_240)] space-y-5 animate-fade-in">
+      <div className="space-y-4 animate-fade-in">
         {/* ─── Header ──────────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between flex-wrap gap-2">
           <div className="flex items-center gap-3">
