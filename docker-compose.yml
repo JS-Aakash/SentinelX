@@ -1,0 +1,111 @@
+version: '3.8'
+
+services:
+  # ─── 1. MongoDB Database Container ──────────────────────────────────────────
+  mongo:
+    image: mongo:7.0
+    container_name: sentinelx-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: sentinelx
+    volumes:
+      - sentinelx_mongo_data:/data/db
+    networks:
+      - sentinelx-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─── 2. Python AI Microservice (FastAPI + XGBoost + Isolation Forest) ──────
+  python-service:
+    build:
+      context: ./python-service
+      dockerfile: Dockerfile
+    container_name: sentinelx-python-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - MODEL_DIR=/app/models
+    volumes:
+      - sentinelx_models_data:/app/models
+    networks:
+      - sentinelx-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─── 3. Express API Backend Server (Node.js + TypeScript + Socket.IO) ──────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sentinelx-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongo:27017/sentinelx
+      - PYTHON_SERVICE_URL=http://python-service:8000
+      - JWT_SECRET=sentinelx_enterprise_secure_jwt_secret_key_2026_prod
+      - JWT_EXPIRES_IN=7d
+      - CORS_ORIGIN=http://localhost:3000
+    depends_on:
+      mongo:
+        condition: service_healthy
+      python-service:
+        condition: service_healthy
+    volumes:
+      - sentinelx_uploads_data:/app/uploads
+      - sentinelx_models_data:/app/uploads/models
+    networks:
+      - sentinelx-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/api/v1/simulation/types', (res) => res.statusCode === 200 ? process.exit(0) : process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ─── 4. Next.js Cybernetic Web Dashboard (React 18 + Tailwind) ─────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:5000/api/v1
+        NEXT_PUBLIC_WS_URL: http://localhost:5000
+    container_name: sentinelx-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    networks:
+      - sentinelx-network
+
+networks:
+  sentinelx-network:
+    driver: bridge
+
+volumes:
+  sentinelx_mongo_data:
+    driver: local
+  sentinelx_models_data:
+    driver: local
+  sentinelx_uploads_data:
+    driver: local
