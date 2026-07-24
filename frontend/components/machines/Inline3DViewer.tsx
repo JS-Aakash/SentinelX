@@ -15,7 +15,8 @@ interface Inline3DViewerProps {
 }
 
 export function Inline3DViewer({ digitalTwin, heightClass = 'h-48' }: Inline3DViewerProps) {
-  const mountRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -29,13 +30,14 @@ export function Inline3DViewer({ digitalTwin, heightClass = 'h-48' }: Inline3DVi
     : '';
 
   useEffect(() => {
-    if (!mountRef.current || !modelUrl) return;
+    if (!containerRef.current || !canvasRef.current || !modelUrl) return;
 
     setLoading(true);
     setProgress(0);
     setError(null);
 
-    const container = mountRef.current;
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
     const width = container.clientWidth || 300;
     const height = container.clientHeight || 200;
 
@@ -47,19 +49,17 @@ export function Inline3DViewer({ digitalTwin, heightClass = 'h-48' }: Inline3DVi
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
     camera.position.set(2.5, 2.5, 4);
 
-    // 3. Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    // 3. Renderer using native canvas element
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
 
-    container.innerHTML = '';
-    container.appendChild(renderer.domElement);
-
     // 4. OrbitControls
-    const controls = new OrbitControls(camera, renderer.domElement);
+    const controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.autoRotate = true;
@@ -155,18 +155,13 @@ export function Inline3DViewer({ digitalTwin, heightClass = 'h-48' }: Inline3DVi
     return () => {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animId);
-      if (renderer.domElement && renderer.domElement.parentNode) {
-        try {
-          renderer.domElement.parentNode.removeChild(renderer.domElement);
-        } catch {}
-      }
       renderer.dispose();
     };
   }, [modelUrl, digitalTwin.modelFormat]);
 
   return (
-    <div className={`relative w-full ${heightClass} rounded-xl overflow-hidden bg-[#0A0B10] border border-[#1B1D2A] group`}>
-      <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+    <div ref={containerRef} className={`relative w-full ${heightClass} rounded-xl overflow-hidden bg-[#0A0B10] border border-[#1B1D2A] group`}>
+      <canvas ref={canvasRef} className="w-full h-full cursor-grab active:cursor-grabbing block" />
 
       {/* Loading Overlay */}
       {loading && (

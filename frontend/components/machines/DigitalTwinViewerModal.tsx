@@ -30,6 +30,7 @@ export function DigitalTwinViewerModal({
 }: DigitalTwinViewerModalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Viewer State
   const [loading, setLoading] = useState(true);
@@ -145,13 +146,14 @@ export function DigitalTwinViewerModal({
 
   // Initialize Three.js Scene
   useEffect(() => {
-    if (!isOpen || !canvasContainerRef.current || !modelUrl) return;
+    if (!isOpen || !canvasContainerRef.current || !canvasRef.current || !modelUrl) return;
 
     setLoading(true);
     setProgress(0);
     setError(null);
 
     const container = canvasContainerRef.current;
+    const canvas = canvasRef.current;
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 500;
 
@@ -165,22 +167,18 @@ export function DigitalTwinViewerModal({
     camera.position.set(3, 3, 5);
     cameraRef.current = camera;
 
-    // 3. Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    // 3. Renderer attached directly to canvas
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
     rendererRef.current = renderer;
 
-    // Clear previous canvas
-    container.innerHTML = '';
-    container.appendChild(renderer.domElement);
-
     // 4. OrbitControls
-    const controls = new OrbitControls(camera, renderer.domElement);
+    const controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2 + 0.1;
@@ -358,7 +356,7 @@ export function DigitalTwinViewerModal({
                 </span>
               </div>
               <p className="text-xs text-[#64748B] font-mono">
-                {machineCode} · {digitalTwin.modelFormat} · {(digitalTwin.modelSize ? (digitalTwin.modelSize / (1024 * 1024)).toFixed(2) : 0)} MB
+                {machineCode} · Interactive 3D Studio
               </p>
             </div>
           </div>
@@ -383,6 +381,7 @@ export function DigitalTwinViewerModal({
 
         {/* ─── 3D Canvas Area ────────────────────────────────────────── */}
         <div ref={canvasContainerRef} className="relative flex-1 bg-[#0A0B10] overflow-hidden">
+          <canvas ref={canvasRef} className="w-full h-full block" />
           {/* Loading Overlay */}
           {loading && (
             <div className="absolute inset-0 bg-[#0A0B10]/90 backdrop-blur-sm z-20 flex flex-col items-center justify-center gap-3">

@@ -198,40 +198,6 @@ export function DigitalTwinCard({ machine, canWrite, onUpdate }: DigitalTwinCard
             {/* Live 3D Model Rendered Directly On Page */}
             <Inline3DViewer digitalTwin={digitalTwin} heightClass="h-36 sm:h-40" />
 
-            {/* Compact Metadata Grid */}
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 bg-[oklch(0.10_0.006_240)] border border-[oklch(0.20_0.01_240)] p-2.5 rounded-xl text-center">
-              <div>
-                <span className="text-[9px] uppercase font-mono text-[#64748B] block">Format</span>
-                <span className="text-xs font-mono font-bold text-purple-400">{digitalTwin.modelFormat || 'GLB'}</span>
-              </div>
-              <div>
-                <span className="text-[9px] uppercase font-mono text-[#64748B] block">Size</span>
-                <span className="text-xs font-mono font-semibold text-cyan-400">{formatFileSize(digitalTwin.modelSize)}</span>
-              </div>
-              <div>
-                <span className="text-[9px] uppercase font-mono text-[#64748B] block">Version</span>
-                <span className="text-xs font-mono font-semibold text-emerald-400">v{digitalTwin.version || 1}</span>
-              </div>
-              <div>
-                <span className="text-[9px] uppercase font-mono text-[#64748B] block">File Name</span>
-                <span className="text-xs text-white truncate block font-medium" title={digitalTwin.modelName || ''}>
-                  {digitalTwin.modelName || '3d_model'}
-                </span>
-              </div>
-              <div>
-                <span className="text-[9px] uppercase font-mono text-[#64748B] block">Date</span>
-                <span className="text-xs text-[#94A3B8]">
-                  {digitalTwin.uploadedAt ? new Date(digitalTwin.uploadedAt).toLocaleDateString() : '—'}
-                </span>
-              </div>
-              <div>
-                <span className="text-[9px] uppercase font-mono text-[#64748B] block">Uploaded By</span>
-                <span className="text-xs text-[#94A3B8] truncate block" title={uploadedByName}>
-                  {uploadedByName}
-                </span>
-              </div>
-            </div>
-
             {/* Action Buttons */}
             <div className="flex items-center gap-2 flex-wrap pt-1">
               <button
