@@ -56,7 +56,7 @@ export function Inline3DViewer({ digitalTwin, heightClass = 'h-48' }: Inline3DVi
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.8;
+    renderer.toneMappingExposure = 1.3;
 
     // 4. OrbitControls
     const controls = new OrbitControls(camera, canvas);
@@ -65,25 +65,24 @@ export function Inline3DViewer({ digitalTwin, heightClass = 'h-48' }: Inline3DVi
     controls.autoRotate = true;
     controls.autoRotateSpeed = 2.5;
 
-    // 5. Studio Bright Lighting Setup
-    const ambientLight = new THREE.AmbientLight(0xffffff, 3.5);
+    // 5. Natural External Studio Lighting Setup
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
     scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444455, 2.5);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x222233, 1.0);
     hemiLight.position.set(0, 50, 0);
     scene.add(hemiLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 3.5);
-    dirLight1.position.set(10, 20, 15);
-    scene.add(dirLight1);
+    // Main External Key Light (Top-Right-Front)
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    keyLight.position.set(12, 18, 12);
+    keyLight.castShadow = true;
+    scene.add(keyLight);
 
-    const dirLight2 = new THREE.DirectionalLight(0xffffff, 2.0);
-    dirLight2.position.set(-10, 10, -15);
-    scene.add(dirLight2);
-
-    const dirLight3 = new THREE.DirectionalLight(0x38bdf8, 1.5);
-    dirLight3.position.set(0, -10, 0);
-    scene.add(dirLight3);
+    // Soft External Fill Light (Back-Left)
+    const fillLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    fillLight.position.set(-12, 8, -10);
+    scene.add(fillLight);
 
     // 6. Grid Helper
     const grid = new THREE.GridHelper(10, 10, 0x3b82f6, 0x1b1d2a);
@@ -105,21 +104,6 @@ export function Inline3DViewer({ digitalTwin, heightClass = 'h-48' }: Inline3DVi
     };
 
     const onModelLoaded = (object: THREE.Object3D) => {
-      // Optimize materials for brightness
-      object.traverse((child) => {
-        if ((child as THREE.Mesh).isMesh) {
-          const mesh = child as THREE.Mesh;
-          if (mesh.material) {
-            const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-            mats.forEach((mat: any) => {
-              if ('roughness' in mat && mat.roughness > 0.8) mat.roughness = 0.5;
-              if ('metalness' in mat && mat.metalness > 0.9) mat.metalness = 0.3;
-              mat.needsUpdate = true;
-            });
-          }
-        }
-      });
-
       modelGroup.add(object);
 
       const box = new THREE.Box3().setFromObject(object);
