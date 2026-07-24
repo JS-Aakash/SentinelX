@@ -6,7 +6,6 @@ import machineRoutes from './machine.routes';
 import deviceRoutes from './device.routes';
 import sensorRoutes from './sensor.routes';
 import dashboardRoutes from './dashboard.routes';
-
 import datasetRoutes from './dataset.routes';
 import aiRoutes from './ai.routes';
 import simulationRoutes from './simulation.routes';
@@ -14,6 +13,10 @@ import maintenanceRoutes from './maintenance.routes';
 import anomalyRoutes from './anomaly.routes';
 import telemetryRoutes from './telemetry.routes';
 import blockchainRoutes from './blockchain.routes';
+import warrantyRoutes from './warranty.routes';
+import lifecycleRoutes from './lifecycle.routes';
+import inventoryRoutes from './inventory.routes';
+import analyticsRoutes from './analytics.routes';
 
 const router = Router();
 
@@ -31,6 +34,10 @@ router.use('/maintenance', maintenanceRoutes);
 router.use('/anomalies', anomalyRoutes);
 router.use('/telemetry', telemetryRoutes);
 router.use('/blockchain', blockchainRoutes);
+router.use('/warranties', warrantyRoutes);
+router.use('/lifecycle', lifecycleRoutes);
+router.use('/inventory', inventoryRoutes);
+router.use('/analytics', analyticsRoutes);
 
 // Health check
 router.get('/health', (_req, res) => {
@@ -38,10 +45,14 @@ router.get('/health', (_req, res) => {
     success: true,
     message: 'SentinelX API is running',
     timestamp: new Date().toISOString(),
-    version: '8.2.0',
-    modules: ['auth', 'company', 'users', 'machines', 'devices', 'sensors', 'dashboard', 'datasets', 'ai', 'simulation', 'maintenance', 'anomalies'],
+    version: '10.0.0',
+    modules: [
+      'auth', 'company', 'users', 'machines', 'devices', 'sensors',
+      'dashboard', 'datasets', 'ai', 'simulation', 'maintenance',
+      'anomalies', 'telemetry', 'blockchain', 'warranties', 'lifecycle',
+      'inventory', 'analytics',
+    ],
   });
 });
 
 export default router;
-

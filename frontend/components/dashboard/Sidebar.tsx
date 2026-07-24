@@ -16,6 +16,9 @@ import {
   Layers,
   Database,
   Sliders,
+  Shield,
+  Package,
+  GitBranch,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
@@ -71,17 +74,38 @@ const NAV_ITEMS = [
     comingSoon: false,
   },
   {
-    label: 'Advanced Analytics',
+    label: 'Asset Lifecycle',
+    href: '/lifecycle',
+    icon: GitBranch,
+    shortcut: '⌘8',
+    comingSoon: false,
+  },
+  {
+    label: 'Warranty & Claims',
+    href: '/warranty',
+    icon: Shield,
+    shortcut: '⌘9',
+    comingSoon: false,
+  },
+  {
+    label: 'Parts Inventory',
+    href: '/inventory',
+    icon: Package,
+    shortcut: '⌘0',
+    comingSoon: false,
+  },
+  {
+    label: 'Analytics',
     href: '/analytics',
     icon: BarChart3,
-    shortcut: 'Soon',
-    comingSoon: true,
+    shortcut: '⌘A',
+    comingSoon: false,
   },
   {
     label: 'System Settings',
     href: '/settings',
     icon: Settings,
-    shortcut: '⌘6',
+    shortcut: '⌘S',
     comingSoon: false,
   },
 ];

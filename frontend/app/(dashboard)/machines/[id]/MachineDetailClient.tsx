@@ -24,6 +24,9 @@ import {
   Plus,
   Unlink,
   Layers,
+  QrCode,
+  Shield,
+  GitBranch,
 } from 'lucide-react';
 import { useMachine } from '@/hooks/useMachine';
 import { machinesApi } from '@/api/machines';
@@ -196,6 +199,13 @@ export default function MachineDetailClient({ id }: { id: string }) {
         <div className="flex items-center gap-2">
           <MachineStatusBadge status={machine.status} size="md" />
           <AILifecycleBadge status={machine.aiLifecycleStatus} size="md" />
+          <Link
+            href={`/machines/${id}/passport`}
+            target="_blank"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-2 text-xs text-indigo-400 transition-colors"
+          >
+            <QrCode size={13} /> Passport
+          </Link>
           {canWrite && (
             <Link
               href={`/machines/${id}/edit`}
