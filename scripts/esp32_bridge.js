@@ -78,7 +78,7 @@ function parseSerialBlock(blockText) {
     temperature: tempMatch ? parseFloat(tempMatch[1]) : 28.5,
     humidity: humMatch ? parseFloat(humMatch[1]) : 58.2,
     voltage: voltMatch ? parseFloat(voltMatch[1]) : 12.3,
-    current: curMatch ? parseFloat(curMatch[1]) : 1.54,
+    current: curMatch ? Math.max(0, Math.round(parseFloat(curMatch[1]) * 1000) / 1000) : 0.0,
     rpm: rpmMatch ? parseFloat(rpmMatch[1]) : 1480,
     sound: soundMatch ? parseFloat(soundMatch[1]) : 320,
     vibration: vibVal,

@@ -56,9 +56,10 @@ float R_meas     = 0.0009f;      // measurement noise (A^2), auto-estimated at b
 
 const float MAX_BIAS_DRIFT_RATE_A_PER_S = 0.00030f; // ~0.018 A/min max creep
 
-float x_current = 0.0f;   // Kalman state 1: estimated true current (A)
-float x_bias     = 0.0f;  // Kalman state 2: estimated slow offset (A)
-float P[2][2]     = {{0.01f, 0}, {0, 0.0001f}};
+float zeroOffsetMv = 2500.0f; // Calibrated zero-current voltage in mV
+float x_current = 0.0f;     // Kalman state: estimated true current (A)
+float x_bias    = 0.0f;     // Reserved
+float P[2][2]   = {{0.01f, 0}, {0, 0.0001f}};
 
 float medianBuf[MEDIAN_WINDOW];
 int   medianIdx = 0;
@@ -117,94 +118,71 @@ float filterOutlier(float rawMv)
 void kalmanUpdate(float z_measured_current, float dt)
 {
     float P00 = P[0][0] + Q_current;
-    float P01 = P[0][1];
-    float P10 = P[1][0];
-    float P11 = P[1][1] + Q_bias;
-
-    float y = z_measured_current - (x_current + x_bias);
-    float S = P00 + P01 + P10 + P11 + R_meas;
+    float y = z_measured_current - x_current;
+    float S = P00 + R_meas;
     if (S < 1e-9f) S = 1e-9f;
 
-    float K0 = (P00 + P01) / S;
-    float K1 = (P10 + P11) / S;
-
-    float prevBias = x_bias;
-
+    float K0 = P00 / S;
     x_current += K0 * y;
-    x_bias    += K1 * y;
-
-    float maxStep = MAX_BIAS_DRIFT_RATE_A_PER_S * dt;
-    float biasDelta = x_bias - prevBias;
-    if (biasDelta > maxStep)
-    {
-        float excess = biasDelta - maxStep;
-        x_bias = prevBias + maxStep;
-        x_current += excess;
-    }
-    else if (biasDelta < -maxStep)
-    {
-        float excess = biasDelta + maxStep;
-        x_bias = prevBias - maxStep;
-        x_current += excess;
-    }
-
-    float KH00 = K0, KH01 = K0;
-    float KH10 = K1, KH11 = K1;
-
-    float nP00 = (1 - KH00) * P00 + (-KH01) * P10;
-    float nP01 = (1 - KH00) * P01 + (-KH01) * P11;
-    float nP10 = (-KH10) * P00 + (1 - KH11) * P10;
-    float nP11 = (-KH10) * P01 + (1 - KH11) * P11;
-
-    P[0][0] = nP00; P[0][1] = nP01;
-    P[1][0] = nP10; P[1][1] = nP11;
+    P[0][0] = (1.0f - K0) * P00;
 }
 
 void calibrateZeroAndNoise()
 {
     Serial.println("Calibrating current sensor zero offset (ensure motor is OFF)...");
     const int N = 500;
-    float samples[N];
-    float sum = 0;
+    float sumMv = 0;
+    float samplesMv[N];
 
     for (int i = 0; i < N; i++)
     {
         float mv = readOversampledMilliVolts();
-        float c = (mv - 2500.0f) / ACS712_SENS_MV_PER_A;
-        samples[i] = c;
-        sum += c;
+        samplesMv[i] = mv;
+        sumMv += mv;
         delay(2);
     }
 
-    float mean = sum / N;
+    float meanMv = sumMv / N;
+    zeroOffsetMv = meanMv; // Store exact zero-current baseline voltage (mV)
 
     float varAcc = 0;
     for (int i = 0; i < N; i++)
     {
-        float d = samples[i] - mean;
-        varAcc += d * d;
+        float d_A = (samplesMv[i] - meanMv) / ACS712_SENS_MV_PER_A;
+        varAcc += d_A * d_A;
     }
     float variance = varAcc / N;
 
-    x_bias = mean;
     x_current = 0.0f;
+    x_bias = 0.0f;
     R_meas = max(variance, 0.00005f);
 
-    Serial.printf("Initial bias: %.4f A | Measurement noise var: %.6f A^2\n", x_bias, R_meas);
+    Serial.printf("Calibrated Zero Offset: %.2f mV | Noise Var: %.6f A^2\n", zeroOffsetMv, R_meas);
 }
 
 float updateCurrentReading()
 {
     unsigned long now = millis();
     float dt = (now - lastKalmanTime) / 1000.0f;
-    if (dt <= 0) dt = 1.0f;
+    if (dt <= 0) dt = 0.01f;
     lastKalmanTime = now;
 
     float rawMv = readOversampledMilliVolts();
     float cleanMv = filterOutlier(rawMv);
-    float rawCurrent = (cleanMv - 2500.0f) / ACS712_SENS_MV_PER_A;
+    
+    // Subtract calibrated zero-current voltage
+    float rawCurrent = (cleanMv - zeroOffsetMv) / ACS712_SENS_MV_PER_A;
+
+    // Small deadband to clear idle micro noise
+    if (fabsf(rawCurrent) < 0.08f)
+    {
+        rawCurrent = 0.0f;
+    }
 
     kalmanUpdate(rawCurrent, dt);
+
+    // Current magnitude cannot be negative for AC/DC load monitoring
+    if (x_current < 0.0f) x_current = 0.0f;
 
     return x_current;
 }
