@@ -112,37 +112,26 @@ export function DigitalTwinCard({ machine, canWrite, onUpdate }: DigitalTwinCard
     <>
       <div className="space-y-4 animate-fade-in">
         {/* ─── Header ──────────────────────────────────────────────────────── */}
-        <div className="flex items-start justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0 shadow-lg shadow-cyan-500/10">
-              <Box size={20} />
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+              <Box size={16} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white tracking-tight">Machine Digital Twin</h3>
-                {digitalTwin.hasModel && (
-                  <span className="text-[10px] font-mono font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 px-2 py-0.5 rounded-full">
-                    v{digitalTwin.version || 1} Active
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-[oklch(0.50_0.01_240)] mt-0.5">
-                Upload a 3D model of this machine for visualization in the Digital Twin dashboard.
-              </p>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-white tracking-tight">Machine Digital Twin</h3>
+              {digitalTwin.hasModel && (
+                <span className="text-[10px] font-mono font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 px-2 py-0.5 rounded-full">
+                  v{digitalTwin.version || 1}
+                </span>
+              )}
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-[oklch(0.50_0.01_240)] font-mono">
-              Max Size: <strong className="text-white">100 MB</strong>
-            </span>
           </div>
         </div>
 
         {/* Error Alert */}
         {error && (
-          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400">
-            <AlertTriangle size={15} className="shrink-0" />
+          <div className="flex items-center gap-2 p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400">
+            <AlertTriangle size={14} className="shrink-0" />
             <span>{error}</span>
           </div>
         )}
@@ -153,7 +142,7 @@ export function DigitalTwinCard({ machine, canWrite, onUpdate }: DigitalTwinCard
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-            className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
+            className={`border-2 border-dashed rounded-xl p-5 text-center transition-all cursor-pointer ${
               dragOver
                 ? 'border-cyan-500 bg-cyan-500/10 scale-[1.01]'
                 : 'border-[oklch(0.24_0.01_240)] bg-[oklch(0.11_0.006_240)] hover:border-cyan-500/40 hover:bg-[oklch(0.13_0.007_240)]'
@@ -169,30 +158,21 @@ export function DigitalTwinCard({ machine, canWrite, onUpdate }: DigitalTwinCard
               disabled={!canWrite || uploading}
             />
 
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-14 h-14 rounded-2xl bg-[#1B1D2A] border border-[#2A2D3E] flex items-center justify-center text-cyan-400 shadow-xl group-hover:scale-110 transition-transform">
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-10 h-10 rounded-xl bg-[#1B1D2A] border border-[#2A2D3E] flex items-center justify-center text-cyan-400 shadow-md">
                 {uploading ? (
-                  <RefreshCw size={24} className="animate-spin text-cyan-400" />
+                  <RefreshCw size={18} className="animate-spin text-cyan-400" />
                 ) : (
-                  <UploadCloud size={28} />
+                  <UploadCloud size={20} />
                 )}
               </div>
 
               <div>
-                <p className="text-sm font-semibold text-white">
-                  {uploading ? 'Uploading 3D Model...' : 'Drag & Drop your 3D Model here'}
+                <p className="text-xs font-semibold text-white">
+                  {uploading ? 'Uploading 3D Model...' : 'Drag & Drop 3D Model'}
                 </p>
-                <p className="text-xs text-cyan-400 hover:underline mt-1 font-medium cursor-pointer">
-                  or Browse Files
-                </p>
-              </div>
-
-              <div className="pt-2 border-t border-[#1B1D2A] w-full max-w-sm">
-                <p className="text-[11px] font-mono text-[#64748B]">
-                  Accepted Formats: <span className="text-[#94A3B8] font-semibold">GLB • GLTF • FBX • OBJ</span>
-                </p>
-                <p className="text-[10px] text-[#64748B] mt-0.5">
-                  (.glb recommended for optimal web performance)
+                <p className="text-[11px] text-cyan-400 hover:underline mt-0.5 font-medium cursor-pointer">
+                  or Browse Files (GLB, GLTF, FBX, OBJ)
                 </p>
               </div>
 
@@ -204,19 +184,19 @@ export function DigitalTwinCard({ machine, canWrite, onUpdate }: DigitalTwinCard
                     fileInputRef.current?.click();
                   }}
                   disabled={uploading}
-                  className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50"
+                  className="mt-1 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold shadow-md shadow-cyan-500/20 transition-all disabled:opacity-50"
                 >
-                  <UploadCloud size={15} />
-                  {uploading ? 'Processing File...' : 'Upload Model'}
+                  <UploadCloud size={13} />
+                  {uploading ? 'Uploading...' : 'Upload 3D Model'}
                 </button>
               )}
             </div>
           </div>
         ) : (
-          /* ─── AFTER UPLOAD STATE: Live 3D Model Canvas + Metadata & Controls ─── */
-          <div className="space-y-3">
+          /* ─── AFTER UPLOAD STATE: Live 3D Model Canvas & Compact Action Buttons ─── */
+          <div className="space-y-2.5">
             {/* Live 3D Model Rendered Directly On Page */}
-            <Inline3DViewer digitalTwin={digitalTwin} heightClass="h-44 sm:h-48" />
+            <Inline3DViewer digitalTwin={digitalTwin} heightClass="h-36 sm:h-40" />
 
             {/* Compact Metadata Grid */}
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 bg-[oklch(0.10_0.006_240)] border border-[oklch(0.20_0.01_240)] p-2.5 rounded-xl text-center">

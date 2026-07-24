@@ -176,9 +176,7 @@ export function DigitalTwinViewerModal({
     rendererRef.current = renderer;
 
     // Clear previous canvas
-    while (container.firstChild) {
-      container.removeChild(container.firstChild);
-    }
+    container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
     // 4. OrbitControls
@@ -303,7 +301,12 @@ export function DigitalTwinViewerModal({
     return () => {
       window.removeEventListener('resize', handleResize);
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
-      if (rendererRef.current && rendererRef.current.domElement) {
+      if (rendererRef.current) {
+        if (rendererRef.current.domElement && rendererRef.current.domElement.parentNode) {
+          try {
+            rendererRef.current.domElement.parentNode.removeChild(rendererRef.current.domElement);
+          } catch {}
+        }
         rendererRef.current.dispose();
       }
     };

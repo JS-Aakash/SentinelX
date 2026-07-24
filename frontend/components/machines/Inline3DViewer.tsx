@@ -55,9 +55,7 @@ export function Inline3DViewer({ digitalTwin, heightClass = 'h-48' }: Inline3DVi
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
 
-    while (container.firstChild) {
-      container.removeChild(container.firstChild);
-    }
+    container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
     // 4. OrbitControls
@@ -157,6 +155,11 @@ export function Inline3DViewer({ digitalTwin, heightClass = 'h-48' }: Inline3DVi
     return () => {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animId);
+      if (renderer.domElement && renderer.domElement.parentNode) {
+        try {
+          renderer.domElement.parentNode.removeChild(renderer.domElement);
+        } catch {}
+      }
       renderer.dispose();
     };
   }, [modelUrl, digitalTwin.modelFormat]);

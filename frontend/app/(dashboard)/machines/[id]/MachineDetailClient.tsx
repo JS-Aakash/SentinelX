@@ -227,11 +227,11 @@ export default function MachineDetailClient({ id }: { id: string }) {
       </div>
 
       {/* ─── Machine Image + Hero + Digital Twin 3D ─────────────────────── */}
-      <div className="glass rounded-2xl p-5 lg:p-6 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 border border-[oklch(0.20_0.01_240)]">
+      <div className="glass rounded-2xl p-4 lg:p-5 flex flex-col xl:flex-row items-center justify-between gap-5 border border-[oklch(0.20_0.01_240)]">
         {/* Left & Center: Image + Machine Information */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-1 min-w-0">
+        <div className="flex flex-col sm:flex-row items-center gap-5 flex-1 min-w-0">
           {/* Image Card - Fixed Ratio Container matching MachineCard */}
-          <div className="relative w-full sm:w-64 md:w-72 h-44 sm:h-48 rounded-xl overflow-hidden shrink-0 border border-[oklch(0.22_0.01_240)] bg-gradient-to-br from-[oklch(0.13_0.008_240)] to-[oklch(0.10_0.006_240)] shadow-lg">
+          <div className="relative w-full sm:w-64 md:w-72 h-40 sm:h-44 rounded-xl overflow-hidden shrink-0 border border-[oklch(0.22_0.01_240)] bg-gradient-to-br from-[oklch(0.13_0.008_240)] to-[oklch(0.10_0.006_240)] shadow-lg">
             {machine.image ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -271,7 +271,7 @@ export default function MachineDetailClient({ id }: { id: string }) {
           </div>
 
           {/* Info Content */}
-          <div className="flex-1 min-w-0 space-y-3">
+          <div className="flex-1 min-w-0 space-y-2.5">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-mono text-xs font-bold text-[oklch(0.62_0.20_240)] tracking-wider px-2 py-0.5 rounded bg-[oklch(0.52_0.24_240/0.12)] border border-[oklch(0.52_0.24_240/0.25)]">
@@ -283,7 +283,7 @@ export default function MachineDetailClient({ id }: { id: string }) {
                   </span>
                 )}
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-white mt-1.5 leading-tight">
+              <h2 className="text-xl sm:text-2xl font-bold text-white mt-1 leading-tight">
                 {machine.name}
               </h2>
               {machine.modelNumber && (
@@ -309,7 +309,7 @@ export default function MachineDetailClient({ id }: { id: string }) {
             </div>
 
             {machine.tags?.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
                 {machine.tags.map((tag) => (
                   <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-[oklch(0.52_0.24_240/0.12)] border border-[oklch(0.52_0.24_240/0.25)] text-[oklch(0.62_0.20_240)] text-[10px] px-2.5 py-0.5 font-medium">
                     <Tag size={9} />{tag}
@@ -321,7 +321,7 @@ export default function MachineDetailClient({ id }: { id: string }) {
         </div>
 
         {/* Right: Machine Digital Twin 3D Section */}
-        <div className="w-full xl:w-[480px] shrink-0 border-t xl:border-t-0 xl:border-l border-[oklch(0.20_0.01_240)] pt-5 xl:pt-0 xl:pl-6">
+        <div className="w-full xl:w-[420px] shrink-0 border-t xl:border-t-0 xl:border-l border-[oklch(0.20_0.01_240)] pt-4 xl:pt-0 xl:pl-5">
           <DigitalTwinCard machine={machine} canWrite={canWrite} onUpdate={() => fetchMachine(id)} />
         </div>
       </div>
