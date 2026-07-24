@@ -84,12 +84,7 @@ export function Inline3DViewer({ digitalTwin, heightClass = 'h-48' }: Inline3DVi
     fillLight.position.set(-12, 8, -10);
     scene.add(fillLight);
 
-    // 6. Grid Helper
-    const grid = new THREE.GridHelper(10, 10, 0x3b82f6, 0x1b1d2a);
-    grid.position.y = 0;
-    scene.add(grid);
-
-    // 7. Group
+    // 6. Group
     const modelGroup = new THREE.Group();
     scene.add(modelGroup);
 
@@ -110,7 +105,7 @@ export function Inline3DViewer({ digitalTwin, heightClass = 'h-48' }: Inline3DVi
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z) || 1;
-      const scale = 2.8 / maxDim;
+      const scale = 3.5 / maxDim;
 
       object.scale.setScalar(scale);
       box.setFromObject(object);
@@ -118,7 +113,8 @@ export function Inline3DViewer({ digitalTwin, heightClass = 'h-48' }: Inline3DVi
       object.position.sub(center);
       object.position.y += (size.y * scale) / 2;
 
-      camera.position.set(0, (size.y * scale) / 2 + 0.8, (size.z * scale) + 3.2);
+      // Slightly zoomed in closer view
+      camera.position.set(0, (size.y * scale) / 2 + 0.5, (size.z * scale) + 2.2);
       controls.target.set(0, (size.y * scale) / 2, 0);
       controls.update();
 

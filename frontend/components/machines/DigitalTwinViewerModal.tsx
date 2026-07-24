@@ -239,7 +239,7 @@ export function DigitalTwinViewerModal({
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z) || 1;
-      const scale = 3.5 / maxDim;
+      const scale = 4.2 / maxDim;
 
       object.scale.setScalar(scale);
 
@@ -249,8 +249,8 @@ export function DigitalTwinViewerModal({
       object.position.sub(center);
       object.position.y += (size.y * scale) / 2;
 
-      // Adjust camera
-      camera.position.set(0, (size.y * scale) / 2 + 1, (size.z * scale) + 4);
+      // Adjust camera (slightly zoomed in closer)
+      camera.position.set(0, (size.y * scale) / 2 + 0.6, (size.z * scale) + 2.8);
       initialCamPosRef.current = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
       controls.target.set(0, (size.y * scale) / 2, 0);
       controls.update();
@@ -445,26 +445,6 @@ export function DigitalTwinViewerModal({
             >
               <Layers3 className="w-3.5 h-3.5" /> Floor Grid
             </button>
-          </div>
-
-          {/* Background Color Chooser (Bottom Right) */}
-          <div className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 bg-[#0D0F1A]/80 backdrop-blur-md border border-[#1B1D2A] px-3 py-1.5 rounded-xl shadow-xl">
-            <span className="text-[10px] uppercase font-mono text-[#64748B] mr-1">Theme</span>
-            {(['dark', 'slate', 'deep', 'gradient', 'studio'] as const).map((theme) => (
-              <button
-                key={theme}
-                onClick={() => setBgStyle(theme)}
-                className={`w-5 h-5 rounded-full border transition-transform ${
-                  bgStyle === theme ? 'scale-125 ring-2 ring-cyan-400' : 'opacity-70 hover:opacity-100'
-                } ${
-                  theme === 'dark' ? 'bg-[#0A0B10] border-slate-700' :
-                  theme === 'slate' ? 'bg-[#1E293B] border-slate-600' :
-                  theme === 'deep' ? 'bg-[#030712] border-gray-800' :
-                  theme === 'gradient' ? 'bg-[#0F172A] border-indigo-700' : 'bg-[#334155] border-slate-500'
-                }`}
-                title={`Background Theme: ${theme}`}
-              />
-            ))}
           </div>
         </div>
 
