@@ -7,7 +7,7 @@
 #define DHTTYPE DHT22
 
 #define SOUND_PIN 34      // D34
-#define CURRENT_PIN 35    // D35 (ACS712-30A OUT)
+#define CURRENT_PIN 35    // D35 (ACS712 OUT)
 #define VOLTAGE_PIN 32    // D32
 #define RPM_PIN 27        // D27
 
@@ -24,7 +24,7 @@ float rpm = 0;
 // ---------- Voltage ----------
 float voltage = 0;
 
-// ---------- Current (Kalman, drift-compensated) ----------
+// ---------- Current (Kalman, Auto-Calibrated) ----------
 float current = 0;  
 
 // ---------- Sound ----------
@@ -44,28 +44,24 @@ void IRAM_ATTR countPulse()
     pulses++;
 }
 
-#define ACS712_SENS_MV_PER_A   66.0f   
+#define ACS712_SENS_MV_PER_A   66.0f   // 66 mV/A for 30A model (use 100.0f for 20A, 185.0f for 5A)
 #define OVERSAMPLE_N            64
 #define MEDIAN_WINDOW            7
 #define MAD_K                    4.0f
 #define MAD_FLOOR_MV             0.5f
 
-float Q_current = 0.00090f;      // process noise: real current (A^2) - large, moves fast
-float Q_bias     = 0.0000004f;   // process noise: bias (A^2) - tiny, moves slowly
-float R_meas     = 0.0009f;      // measurement noise (A^2), auto-estimated at boot
+// Auto-calibrated zero-current baseline voltage (in mV)
+float zeroMilliVolts = 2500.0f;
 
-const float MAX_BIAS_DRIFT_RATE_A_PER_S = 0.00030f; // ~0.018 A/min max creep
-
-float zeroOffsetMv = 2500.0f; // Calibrated zero-current voltage in mV
-float x_current = 0.0f;     // Kalman state: estimated true current (A)
-float x_bias    = 0.0f;     // Reserved
-float P[2][2]   = {{0.01f, 0}, {0, 0.0001f}};
+// Kalman Filter State
+float x_current = 0.0f;   // Estimated current magnitude (A)
+float P_current = 0.01f;  // Covariance
+float Q_current = 0.001f; // Process noise
+float R_meas    = 0.005f; // Measurement noise
 
 float medianBuf[MEDIAN_WINDOW];
 int   medianIdx = 0;
 bool  medianFull = false;
-
-unsigned long lastKalmanTime = 0;
 
 float readOversampledMilliVolts()
 {
@@ -115,92 +111,47 @@ float filterOutlier(float rawMv)
     return rawMv;
 }
 
-void kalmanUpdate(float z_measured_current, float dt)
-{
-    float P00 = P[0][0] + Q_current;
-    float y = z_measured_current - x_current;
-    float S = P00 + R_meas;
-    if (S < 1e-9f) S = 1e-9f;
-
-    float K0 = P00 / S;
-    x_current += K0 * y;
-    P[0][0] = (1.0f - K0) * P00;
-}
-
 void calibrateZeroAndNoise()
 {
-    Serial.println("Calibrating current sensor zero offset (ensure motor is OFF)...");
-    const int N = 500;
-    float sumMv = 0;
-    float samplesMv[N];
+    Serial.println("Calibrating current sensor zero offset (ensure load is OFF)...");
+    const int N = 600;
+    double sumMv = 0;
 
     for (int i = 0; i < N; i++)
     {
-        float mv = readOversampledMilliVolts();
-        samplesMv[i] = mv;
-        sumMv += mv;
+        sumMv += readOversampledMilliVolts();
         delay(2);
     }
 
-    float meanMv = sumMv / N;
-    zeroOffsetMv = meanMv; // Store exact zero-current baseline voltage (mV)
-
-    float varAcc = 0;
-    for (int i = 0; i < N; i++)
-    {
-        float d_A = (samplesMv[i] - meanMv) / ACS712_SENS_MV_PER_A;
-        varAcc += d_A * d_A;
-    }
-    float variance = varAcc / N;
-
+    zeroMilliVolts = (float)(sumMv / N);
     x_current = 0.0f;
-    x_bias = 0.0f;
-    R_meas = max(variance, 0.00005f);
+    P_current = 0.01f;
 
-    Serial.printf("Calibrated Zero Offset: %.2f mV | Noise Var: %.6f A^2\n", zeroOffsetMv, R_meas);
-}
-
-float readCurrentRMS()
-{
-    unsigned long start = millis();
-    uint32_t samplesCount = 0;
-    double sumSqDiff = 0;
-
-    // Sample over 40ms (covers 2 full 50Hz AC cycles)
-    while (millis() - start < 40)
-    {
-        float mv = (float)analogReadMilliVolts(CURRENT_PIN);
-        float diff_A = (mv - zeroOffsetMv) / ACS712_SENS_MV_PER_A;
-        sumSqDiff += (diff_A * diff_A);
-        samplesCount++;
-        delayMicroseconds(100);
-    }
-
-    if (samplesCount == 0) return 0.0f;
-
-    float rmsCurrent = (float)sqrt(sumSqDiff / samplesCount);
-
-    // Micro noise floor threshold for idle 0A load
-    if (rmsCurrent < 0.06f)
-    {
-        rmsCurrent = 0.0f;
-    }
-
-    return rmsCurrent;
+    Serial.printf("✅ Calibrated Zero Voltage: %.2f mV | Sensitivity: %.1f mV/A\n", zeroMilliVolts, ACS712_SENS_MV_PER_A);
 }
 
 float updateCurrentReading()
 {
-    unsigned long now = millis();
-    float dt = (now - lastKalmanTime) / 1000.0f;
-    if (dt <= 0) dt = 0.01f;
-    lastKalmanTime = now;
+    float rawMv = readOversampledMilliVolts();
+    float cleanMv = filterOutlier(rawMv);
 
-    float rawRms = readCurrentRMS();
+    // Measure delta voltage relative to calibrated zero baseline
+    float deltaMv = cleanMv - zeroMilliVolts;
+    float rawCurrentA = fabsf(deltaMv) / ACS712_SENS_MV_PER_A;
 
-    kalmanUpdate(rawRms, dt);
+    // Apply noise floor gate (ignore small ADC thermal noise under 0.08 A)
+    if (rawCurrentA < 0.08f) {
+        rawCurrentA = 0.0f;
+    }
 
-    if (x_current < 0.02f) x_current = 0.0f;
+    // 1-D Kalman Filter for smooth reading
+    P_current = P_current + Q_current;
+    float K = P_current / (P_current + R_meas);
+    x_current = x_current + K * (rawCurrentA - x_current);
+    P_current = (1.0f - K) * P_current;
+
+    // Ensure non-negative output
+    if (x_current < 0.05f) x_current = 0.0f;
 
     return x_current;
 }
@@ -218,7 +169,7 @@ float readVoltage()
     float adc = sum / 20.0;
     float sensorVoltage = adc * (3.3 / 4095.0);
 
-    // Common 0-25V module
+    // Common 0-25V module (5:1 divider)
     return sensorVoltage * 5.0;
 }
 
@@ -257,7 +208,6 @@ void setup()
 
     delay(1000);
     calibrateZeroAndNoise();
-    lastKalmanTime = millis();
 
     Serial.println();
     Serial.println("==============================");
@@ -287,7 +237,7 @@ void loop()
     // ---------- Sound ----------
     soundValue = analogRead(SOUND_PIN);
 
-    // ---------- Current (drift-compensated) & Voltage ----------
+    // ---------- Current (calibrated) & Voltage ----------
     current = updateCurrentReading();
     voltage = readVoltage();
 
@@ -340,9 +290,9 @@ void loop()
     Serial.print(current, 3);
     Serial.println(" A");
 
-    Serial.print("Bias(diag)  : ");
-    Serial.print(x_bias, 4);
-    Serial.println(" A");
+    Serial.print("Zero MV     : ");
+    Serial.print(zeroMilliVolts, 2);
+    Serial.println(" mV");
 
     Serial.print("Sound ADC   : ");
     Serial.println(soundValue);
