@@ -24,7 +24,7 @@ float rpm = 0;
 // ---------- Voltage ----------
 float voltage = 0;
 
-// ---------- Current (Kalman, Auto-Calibrated) ----------
+// ---------- Current (RMS + Smooth Filter) ----------
 float current = 0;  
 
 // ---------- Sound ----------
@@ -45,71 +45,10 @@ void IRAM_ATTR countPulse()
 }
 
 #define ACS712_SENS_MV_PER_A   66.0f   // 66 mV/A for 30A model (use 100.0f for 20A, 185.0f for 5A)
-#define OVERSAMPLE_N            64
-#define MEDIAN_WINDOW            7
-#define MAD_K                    4.0f
-#define MAD_FLOOR_MV             0.5f
 
 // Auto-calibrated zero-current baseline voltage (in mV)
 float zeroMilliVolts = 2500.0f;
-
-// Kalman Filter State
-float x_current = 0.0f;   // Estimated current magnitude (A)
-float P_current = 0.01f;  // Covariance
-float Q_current = 0.001f; // Process noise
-float R_meas    = 0.005f; // Measurement noise
-
-float medianBuf[MEDIAN_WINDOW];
-int   medianIdx = 0;
-bool  medianFull = false;
-
-float readOversampledMilliVolts()
-{
-    uint32_t acc = 0;
-    for (int i = 0; i < OVERSAMPLE_N; i++)
-    {
-        acc += analogReadMilliVolts(CURRENT_PIN);
-    }
-    return (float)acc / OVERSAMPLE_N;
-}
-
-float getMedian(float *buf, int n)
-{
-    float tmp[MEDIAN_WINDOW];
-    memcpy(tmp, buf, n * sizeof(float));
-    for (int i = 1; i < n; i++)
-    {
-        float key = tmp[i];
-        int j = i - 1;
-        while (j >= 0 && tmp[j] > key) { tmp[j + 1] = tmp[j]; j--; }
-        tmp[j + 1] = key;
-    }
-    return tmp[n / 2];
-}
-
-float getMAD(float *buf, int n, float median)
-{
-    float dev[MEDIAN_WINDOW];
-    for (int i = 0; i < n; i++) dev[i] = fabsf(buf[i] - median);
-    return getMedian(dev, n);
-}
-
-float filterOutlier(float rawMv)
-{
-    medianBuf[medianIdx] = rawMv;
-    medianIdx = (medianIdx + 1) % MEDIAN_WINDOW;
-    if (medianIdx == 0) medianFull = true;
-
-    int n = medianFull ? MEDIAN_WINDOW : medianIdx;
-    if (n < 3) return rawMv;
-
-    float med = getMedian(medianBuf, n);
-    float mad = getMAD(medianBuf, n, med);
-    if (mad < MAD_FLOOR_MV) mad = MAD_FLOOR_MV;
-
-    if (fabsf(rawMv - med) > MAD_K * mad) return med;
-    return rawMv;
-}
+float currentFiltered = 0.0f;
 
 void calibrateZeroAndNoise()
 {
@@ -119,41 +58,50 @@ void calibrateZeroAndNoise()
 
     for (int i = 0; i < N; i++)
     {
-        sumMv += readOversampledMilliVolts();
+        sumMv += analogReadMilliVolts(CURRENT_PIN);
         delay(2);
     }
 
     zeroMilliVolts = (float)(sumMv / N);
-    x_current = 0.0f;
-    P_current = 0.01f;
+    currentFiltered = 0.0f;
 
     Serial.printf("✅ Calibrated Zero Voltage: %.2f mV | Sensitivity: %.1f mV/A\n", zeroMilliVolts, ACS712_SENS_MV_PER_A);
 }
 
 float updateCurrentReading()
 {
-    float rawMv = readOversampledMilliVolts();
-    float cleanMv = filterOutlier(rawMv);
+    // Sample ACS712 over an 80ms window (~4-5 full 50Hz/60Hz AC cycles or DC RMS)
+    unsigned long start = millis();
+    double sumSqDiffMv = 0;
+    int samples = 0;
 
-    // Measure delta voltage relative to calibrated zero baseline
-    float deltaMv = cleanMv - zeroMilliVolts;
-    float rawCurrentA = fabsf(deltaMv) / ACS712_SENS_MV_PER_A;
+    while (millis() - start < 80)
+    {
+        float mv = (float)analogReadMilliVolts(CURRENT_PIN);
+        float diffMv = mv - zeroMilliVolts;
+        sumSqDiffMv += (diffMv * diffMv);
+        samples++;
+        delayMicroseconds(400);
+    }
 
-    // Apply noise floor gate (ignore small ADC thermal noise under 0.08 A)
-    if (rawCurrentA < 0.08f) {
+    if (samples == 0) return currentFiltered;
+
+    float rmsMv = sqrt(sumSqDiffMv / samples);
+    float rawCurrentA = rmsMv / ACS712_SENS_MV_PER_A;
+
+    // Small noise floor threshold (suppress ADC thermal noise under 0.025 A / 25 mA)
+    if (rawCurrentA < 0.025f) {
         rawCurrentA = 0.0f;
     }
 
-    // 1-D Kalman Filter for smooth reading
-    P_current = P_current + Q_current;
-    float K = P_current / (P_current + R_meas);
-    x_current = x_current + K * (rawCurrentA - x_current);
-    P_current = (1.0f - K) * P_current;
+    // Smooth output using responsive Exponential Moving Average (Alpha Filter = 0.20)
+    currentFiltered = 0.80f * currentFiltered + 0.20f * rawCurrentA;
 
-    // Ensure non-negative output
-    if (x_current < 0.05f) x_current = 0.0f;
+    if (currentFiltered < 0.015f) {
+        currentFiltered = 0.0f;
+    }
 
-    return x_current;
+    return currentFiltered;
 }
 
 float readVoltage()
@@ -237,7 +185,7 @@ void loop()
     // ---------- Sound ----------
     soundValue = analogRead(SOUND_PIN);
 
-    // ---------- Current (calibrated) & Voltage ----------
+    // ---------- Current (RMS) & Voltage ----------
     current = updateCurrentReading();
     voltage = readVoltage();
 
