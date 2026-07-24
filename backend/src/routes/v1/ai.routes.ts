@@ -27,7 +27,7 @@ router.use(authenticate);
 router.post('/train', trainModel);
 router.post('/retrain', retrainModel);
 router.get('/status/:machineId', getModelStatus);
-router.get('/history/:machineId', getModelHistory);
+router.get('/models/history/:machineId', getModelHistory);
 router.get('/report/:modelId', getModelReport);
 router.post('/restore/:modelId', restoreModelVersion);
 router.delete('/model/:modelId', deleteModelVersion);
@@ -35,7 +35,8 @@ router.delete('/model/:modelId', deleteModelVersion);
 // Live Inference, Forecasting & Dashboard APIs
 router.post('/predict/:machineId', triggerLiveInference);
 router.get('/latest/:machineId', getLatestPrediction);
-router.get('/history/:machineId', getPredictionHistory);
+router.get('/predictions/history/:machineId', getPredictionHistory);
+router.get('/history/:machineId', getPredictionHistory); // Fallback alias
 router.get('/forecast/:machineId', getActiveForecast);
 router.get('/dashboard/:machineId', getAIDashboard);
 router.get('/recommendations/:machineId', getRecommendations);

@@ -64,6 +64,13 @@ const NAV_ITEMS = [
     comingSoon: false,
   },
   {
+    label: 'Blockchain Explorer',
+    href: '/blockchain',
+    icon: ShieldCheck,
+    shortcut: '⌘7',
+    comingSoon: false,
+  },
+  {
     label: 'Advanced Analytics',
     href: '/analytics',
     icon: BarChart3,

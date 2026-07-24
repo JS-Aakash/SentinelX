@@ -1,0 +1,488 @@
+Module – Maintenance, Workforce Management, IPFS & Blockchain
+Objective
+
+Develop a complete Maintenance Lifecycle Management module for SentinelX that transforms AI maintenance predictions into real maintenance workflows, manages employees with role-based access, stores maintenance evidence on IPFS, and records immutable maintenance history on the Ethereum Sepolia Testnet.
+
+This module must integrate seamlessly with the existing SentinelX architecture and AI pipeline.
+
+9.1 Maintenance Management
+
+When the AI predicts maintenance, display for every machine:
+
+Current Health Score
+Remaining Operating Hours
+Estimated Maintenance Date
+Risk Level
+Maintenance Priority
+AI Recommendation
+
+Example:
+
+Machine : PCP-001
+
+Health Score
+74%
+
+Remaining Operating Hours
+185 Hours
+
+Predicted Maintenance
+03 August
+
+Priority
+High
+
+AI Recommendation
+
+• Inspect motor bearings
+• Check shaft alignment
+• Replace lubricant
+9.2 Maintenance Work Orders
+
+Managers can create maintenance work orders.
+
+Fields
+
+Work Order ID
+Machine
+Created By
+Assigned Engineer
+Priority
+Status
+Due Date
+Estimated Duration
+Description
+
+Workflow
+
+Pending
+   ↓
+Assigned
+   ↓
+In Progress
+   ↓
+Completed
+   ↓
+Verified
+   ↓
+Closed
+9.3 Employee Management
+
+If employee management does not already exist, implement it.
+
+Roles
+Admin
+
+Full system access
+Register machines
+Add/Edit/Delete users
+Assign roles
+View blockchain records
+Manage AI models
+Retrain AI
+
+Maintenance Manager
+
+Create work orders
+Assign engineers
+View reports
+Schedule maintenance
+Verify completed work
+
+Maintenance Engineer
+
+View assigned work
+Upload repair reports
+Upload repair photos/videos
+Complete maintenance
+Add remarks
+
+Operator
+
+View dashboard
+Monitor machines
+Report issues
+
+9.4 Maintenance Workflow
+AI Predicts Maintenance
+
+↓
+
+Manager Reviews Recommendation
+
+↓
+
+Creates Work Order
+
+↓
+
+Assigns Engineer
+
+↓
+
+Engineer Repairs Machine
+
+↓
+
+Uploads Report
+
+↓
+
+Uploads Photos
+
+↓
+
+Supervisor Verifies
+
+↓
+
+Files Uploaded to IPFS
+
+↓
+
+Blockchain Transaction Created
+
+↓
+
+Maintenance History Updated
+
+↓
+
+Machine Health Recalculated
+9.5 Maintenance Report
+
+Engineers complete a maintenance report containing:
+
+Machine
+Date
+Problem
+Diagnosis
+Root Cause
+Action Taken
+Parts Replaced
+Time Taken
+Downtime
+Remarks
+Next Inspection Date
+9.6 Evidence Upload
+
+Allow upload of:
+
+Before Repair Photos
+After Repair Photos
+Machine Damage Images
+Videos
+Maintenance Report PDF
+Invoice
+Certificates
+
+Store every file on IPFS (Pinata).
+
+Save only the returned CID inside the database.
+
+9.7 IPFS Integration
+
+Store immutable files:
+
+Maintenance Reports
+Photos
+Videos
+Inspection Reports
+Warranty Documents
+Calibration Certificates
+Invoices
+
+Never store these files directly on the blockchain.
+
+Only store
+
+IPFS CID
+
+inside blockchain records.
+
+9.8 Blockchain Integration
+
+Use the Ethereum Sepolia Testnet.
+
+Deploy a Solidity smart contract using Hardhat.
+
+Every verified maintenance creates an immutable blockchain record.
+
+Fields
+
+Machine ID
+Maintenance ID
+Engineer ID
+Timestamp
+IPFS CID
+Status
+Transaction Hash
+
+This creates a permanent audit trail.
+
+9.9 Backend-Signed Blockchain Transactions (IMPORTANT)
+
+Do NOT require MetaMask for users, judges, or engineers.
+
+The application must interact with the real Ethereum Sepolia blockchain without requiring any browser wallet or extension.
+
+Required Architecture
+React Frontend
+
+↓
+
+Node.js Backend
+
+↓
+
+JWT Authentication
+
+↓
+
+Role Verification
+
+↓
+
+Backend Wallet
+
+↓
+
+Ethereum Sepolia
+
+↓
+
+Transaction Hash
+
+↓
+
+Database
+Requirements
+
+Maintain a dedicated server wallet.
+
+Store its private key securely in environment variables.
+
+Use ethers.js v6 on the backend to sign blockchain transactions.
+
+Only backend services communicate with the blockchain.
+
+Users never expose private keys.
+
+No browser wallet connection is required.
+
+Benefits
+
+Judges should simply open the hosted website.
+
+No MetaMask installation.
+
+No wallet connection.
+
+No browser extensions.
+
+No Sepolia configuration.
+
+Yet all blockchain records must be real and publicly verifiable on Ethereum Sepolia.
+
+9.10 Smart Contract
+
+Implement functions
+
+createMaintenance()
+
+verifyMaintenance()
+
+getMaintenance()
+
+getMachineHistory()
+
+Only
+
+Admin
+
+and
+
+Maintenance Manager
+
+may create blockchain records.
+
+Everyone may read and verify.
+
+9.11 Blockchain Verification
+
+Maintenance History page should display
+
+Verified
+Blockchain Transaction Hash
+Block Number
+Timestamp
+Wallet Address
+IPFS CID
+
+Provide
+
+Verify on Blockchain
+
+button
+
+which opens the Sepolia Explorer.
+
+Anyone should be able to verify the transaction without logging in.
+
+9.12 Maintenance History
+
+Each machine has a complete timeline.
+
+Installation
+
+↓
+
+Maintenance
+
+↓
+
+Repair
+
+↓
+
+Component Replacement
+
+↓
+
+Maintenance
+
+↓
+
+Current Status
+
+Each record stores
+
+Engineer
+Cost
+Duration
+Health Before
+Health After
+Report
+Images
+Blockchain Hash
+IPFS
+9.13 Dashboard
+
+Display
+
+Pending Work Orders
+Completed Today
+Critical Machines
+Engineers Available
+Upcoming Maintenance
+Average Repair Time
+
+9.14 Notifications
+
+Notify
+
+Admin
+Manager
+Engineer
+
+for
+
+Critical anomaly
+Maintenance due
+Work assigned
+Work completed
+Verification pending
+9.15 Analytics
+
+Generate
+
+Monthly Repairs
+Downtime
+Mean Repair Time
+Most Replaced Components
+Common Failure Types
+Engineer Performance
+Machine Reliability
+9.16 Blockchain Explorer Page
+
+Create a dedicated Blockchain page.
+
+Display
+
+Latest Blockchain Records
+Machine
+Engineer
+Transaction Hash
+Wallet
+Block Number
+Timestamp
+IPFS
+Verification Status
+
+Clicking the transaction opens Sepolia Explorer.
+
+9.17 Security
+
+Implement
+
+JWT Authentication
+Role-Based Access Control
+Permission Matrix
+Secure Backend Wallet
+Immutable Blockchain Records
+
+Never expose the blockchain private key to the frontend.
+
+Suggested Technology Stack
+Module	Technology
+Authentication	JWT + RBAC
+File Storage	Pinata IPFS
+Blockchain	Ethereum Sepolia
+Smart Contract	Solidity
+Framework	Hardhat
+Blockchain Library	ethers.js v6
+Transaction Signing	Backend Wallet (No MetaMask Required)
+Backend	Express.js
+Database	PostgreSQL + TimescaleDB
+AI	Existing FastAPI
+Frontend	React + TypeScript
+Final Workflow
+AI Predicts Maintenance
+        │
+        ▼
+Manager Reviews Recommendation
+        │
+        ▼
+Creates Work Order
+        │
+        ▼
+Assigns Engineer
+        │
+        ▼
+Engineer Repairs Machine
+        │
+        ▼
+Uploads Report & Evidence
+        │
+        ▼
+Evidence Stored on IPFS
+        │
+        ▼
+Backend Signs Blockchain Transaction
+        │
+        ▼
+Ethereum Sepolia Testnet
+        │
+        ▼
+Transaction Hash Returned
+        │
+        ▼
+Maintenance History Updated
+        │
+        ▼
+Machine Health Recalculated
+Important Requirements
+Do not modify any existing AI, machine learning, dashboard, or sensor modules unless necessary for integration.
+Reuse the existing authentication and machine management systems wherever possible.
+Ensure blockchain integration is production-like, with real Sepolia transactions but no MetaMask dependency for end users.
+The hosted application should allow judges to browse, verify blockchain records, and inspect IPFS documents using only a standard web browser. Only authorized backend services should create blockchain transactions. This provides a smooth demonstration while preserving the authenticity of blockchain integration.

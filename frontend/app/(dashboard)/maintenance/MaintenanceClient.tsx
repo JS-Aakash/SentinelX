@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { maintenanceApi, MaintenanceOverview, WorkOrder, FleetInsight } from '@/api/maintenance';
+import { maintenanceApi, MaintenanceOverview, WorkOrder, FleetInsight, MaintenanceRecord } from '@/api/maintenance';
 import { machinesApi } from '@/api/machines';
 import { Machine } from '@/types';
 import {
@@ -18,7 +18,14 @@ import {
   Loader2,
   X,
   ChevronRight,
-  ShieldAlert,
+  ShieldCheck,
+  Database,
+  ExternalLink,
+  Users,
+  FileText,
+  Upload,
+  Sparkles,
+  Search,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -34,13 +41,22 @@ export default function MaintenanceClient() {
   const [overview, setOverview] = useState<MaintenanceOverview | null>(null);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
+  const [timeline, setTimeline] = useState<MaintenanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'matrix' | 'work_orders'>('matrix');
+  const [activeTab, setActiveTab] = useState<'matrix' | 'work_orders' | 'workforce' | 'timeline'>('matrix');
+  const [selectedMachineTimeline, setSelectedMachineTimeline] = useState<string>('');
 
-  // Work Order Modal State
-  const [showModal, setShowModal] = useState(false);
+  // Modals
+  const [showWOModal, setShowWOModal] = useState(false);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [selectedWOForComplete, setSelectedWOForComplete] = useState<WorkOrder | null>(null);
+
   const [submittingWO, setSubmittingWO] = useState(false);
-  const [formData, setFormData] = useState({
+  const [completingWO, setCompletingWO] = useState(false);
+  const [verifyingWOId, setVerifyingWOId] = useState<string | null>(null);
+
+  // WO Form Data
+  const [woFormData, setWoFormData] = useState({
     machineId: '',
     title: '',
     description: '',
@@ -48,6 +64,19 @@ export default function MaintenanceClient() {
     priority: 'high',
     dueDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
   });
+
+  // Repair Completion Form Data
+  const [completeFormData, setCompleteFormData] = useState({
+    problem: '',
+    diagnosis: '',
+    rootCause: '',
+    actionTaken: '',
+    partsReplaced: 'Motor Bearings, Coolant Seal',
+    downtimeHours: 1.5,
+    cost: 250,
+    remarks: 'Full repair complete and thermal tolerances re-verified.',
+  });
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -58,26 +87,46 @@ export default function MaintenanceClient() {
       ]);
       setOverview(ovRes.data?.data || null);
       setWorkOrders(woRes.data?.data?.workOrders || []);
-      setMachines(mRes.data?.data || []);
+      const machList = mRes.data?.data || [];
+      setMachines(machList);
+      if (machList.length > 0 && !selectedMachineTimeline) {
+        setSelectedMachineTimeline(machList[0]._id || machList[0].id);
+      }
     } catch (err) {
       console.error('Failed to load maintenance data:', err);
     } finally {
       setLoading(false);
     }
+  }, [selectedMachineTimeline]);
+
+  const fetchTimeline = useCallback(async (machineId: string) => {
+    if (!machineId) return;
+    try {
+      const res = await maintenanceApi.getTimeline(machineId);
+      setTimeline(res.data?.data || []);
+    } catch (err) {
+      console.error('Failed to fetch timeline:', err);
+    }
   }, []);
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(fetchData, 6000);
     return () => clearInterval(interval);
   }, [fetchData]);
+
+  useEffect(() => {
+    if (selectedMachineTimeline) {
+      fetchTimeline(selectedMachineTimeline);
+    }
+  }, [selectedMachineTimeline, fetchTimeline]);
 
   const handleOpenWOModal = (insight?: FleetInsight) => {
     if (insight) {
       const rec = insight.recommendations[0];
-      setFormData({
+      setWoFormData({
         machineId: insight.machineId,
-        title: rec ? rec.title : `Predictive Inspection: ${insight.name}`,
+        title: rec ? rec.title : `Predictive Repair: ${insight.name}`,
         description: rec
           ? `${rec.description}\nRecommended Action: ${rec.action}`
           : `Perform health inspection for ${insight.name} (${insight.machineCode}). Health Score: ${insight.healthScore}%, RSOT: ${insight.rsot}.`,
@@ -86,7 +135,7 @@ export default function MaintenanceClient() {
         dueDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
       });
     } else {
-      setFormData({
+      setWoFormData({
         machineId: machines[0]?._id || machines[0]?.id || '',
         title: '',
         description: '',
@@ -95,379 +144,482 @@ export default function MaintenanceClient() {
         dueDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
       });
     }
-    setShowModal(true);
+    setShowWOModal(true);
   };
 
-  const handleCreateWO = async (e: React.FormEvent) => {
+  const handleCreateWorkOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.machineId || !formData.title || !formData.description) return;
-    setSubmittingWO(true);
+    if (!woFormData.machineId || !woFormData.title || !woFormData.description) return;
     try {
-      await maintenanceApi.createWorkOrder(formData);
-      setShowModal(false);
+      setSubmittingWO(true);
+      await maintenanceApi.createWorkOrder(woFormData);
+      setShowWOModal(false);
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to create work order');
+      alert(err?.response?.data?.message || 'Failed to create work order');
     } finally {
       setSubmittingWO(false);
     }
   };
 
-  const handleUpdateWOStatus = async (woId: string, status: any) => {
+  const handleOpenCompleteModal = (wo: WorkOrder) => {
+    setSelectedWOForComplete(wo);
+    setCompleteFormData({
+      problem: wo.title,
+      diagnosis: 'Detected bearing play and elevated thermal dissipation',
+      rootCause: 'High operational friction & lubricant degradation',
+      actionTaken: 'Replaced motor bearings, cleaned air intake, flushed coolant',
+      partsReplaced: 'Motor Bearings (ISO 6208), Thermal Seal',
+      downtimeHours: 1.5,
+      cost: 320,
+      remarks: 'Maintenance completed. Re-tested under load with clean vibration spectrum.',
+    });
+    setShowCompleteModal(true);
+  };
+
+  const handleCompleteWorkOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedWOForComplete) return;
     try {
-      await maintenanceApi.updateStatus(woId, status);
+      setCompletingWO(true);
+      const fd = new FormData();
+      fd.append('problem', completeFormData.problem);
+      fd.append('diagnosis', completeFormData.diagnosis);
+      fd.append('rootCause', completeFormData.rootCause);
+      fd.append('actionTaken', completeFormData.actionTaken);
+      fd.append('partsReplaced', completeFormData.partsReplaced);
+      fd.append('downtimeHours', String(completeFormData.downtimeHours));
+      fd.append('cost', String(completeFormData.cost));
+      fd.append('remarks', completeFormData.remarks);
+
+      selectedFiles.forEach((file) => {
+        fd.append('evidenceFiles', file);
+      });
+
+      await maintenanceApi.completeWorkOrder(selectedWOForComplete._id, fd);
+      setShowCompleteModal(false);
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to update work order status');
+      alert(err?.response?.data?.message || 'Failed to submit repair completion');
+    } finally {
+      setCompletingWO(false);
     }
   };
 
-  const metrics = overview?.metrics;
+  const handleVerifyWorkOrder = async (woId: string) => {
+    try {
+      setVerifyingWOId(woId);
+      await maintenanceApi.verifyWorkOrder(woId);
+      fetchData();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Sepolia Blockchain Verification failed');
+    } finally {
+      setVerifyingWOId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-96 items-center justify-center font-mono text-[#00F2FE]">
+        <Loader2 size={32} className="animate-spin mr-3" />
+        <span>INITIALIZING SENTINELX MAINTENANCE & WORKFORCE PIPELINE...</span>
+      </div>
+    );
+  }
+
+  // Work order metrics
+  const pendingCount = workOrders.filter((w) => w.status === 'pending' || w.status === 'assigned').length;
+  const inProgressCount = workOrders.filter((w) => w.status === 'in_progress').length;
+  const completedCount = workOrders.filter((w) => w.status === 'completed').length;
+  const verifiedCount = workOrders.filter((w) => w.status === 'verified' || w.status === 'closed').length;
+
+  const chartData = [
+    { name: 'Pending', count: pendingCount, color: '#F59E0B' },
+    { name: 'In Progress', count: inProgressCount, color: '#3B82F6' },
+    { name: 'Completed', count: completedCount, color: '#10B981' },
+    { name: 'Verified (Sepolia)', count: verifiedCount, color: '#8B5CF6' },
+  ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="space-y-6 font-mono pb-12">
+      {/* Header Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#1B1E2B] pb-5">
         <div>
-          <div className="flex items-center gap-2 text-xs text-[oklch(0.55_0.01_240)] mb-1">
-            <span>SentinelX</span>
-            <span>/</span>
-            <span className="text-[oklch(0.62_0.20_240)] font-medium">Predictive Maintenance</span>
+          <div className="flex items-center gap-2">
+            <Wrench className="h-6 w-6 text-[#00F2FE]" />
+            <h1 className="text-xl font-bold tracking-wider text-white uppercase">
+              MAINTENANCE & WORKFORCE MANAGEMENT
+            </h1>
+            <span className="rounded-full bg-[#10B981]/10 border border-[#10B981]/30 text-[#10B981] text-[10px] px-2.5 py-0.5 font-bold uppercase">
+              Module 9 Active
+            </span>
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-            <Wrench className="text-[oklch(0.62_0.20_240)]" size={24} />
-            Predictive Maintenance & Work Orders
-          </h1>
-          <p className="text-xs text-[oklch(0.55_0.01_240)] mt-1">
-            AI-driven failure mode forecasting, RSOT threshold alerts, and maintenance dispatching.
+          <p className="mt-1 text-xs text-[#94A3B8]">
+            AI Prediction Workflows · IPFS Evidence Storage · Ethereum Sepolia Blockchain Verification
           </p>
         </div>
 
         <button
-          type="button"
           onClick={() => handleOpenWOModal()}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-[oklch(0.52_0.24_240)] to-blue-600 hover:from-[oklch(0.58_0.26_240)] hover:to-blue-500 transition-all shadow-lg hover:shadow-blue-500/20"
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#00F2FE] to-[#4FACFE] text-[#0A0B10] px-4 py-2 text-xs font-bold shadow-lg shadow-[#00F2FE]/20 hover:brightness-110 transition-all"
         >
-          <Plus size={15} />
-          Create Work Order
+          <Plus size={16} /> CREATE WORK ORDER
         </button>
       </div>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass rounded-2xl p-4 border border-[oklch(0.20_0.01_240)] flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
-            <Activity size={22} />
+      {/* Overview Stat Cards */}
+      <div className="grid grid-[#1B1E2B] grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="rounded-2xl border border-[#1B1E2B] bg-[#0B0C12] p-4">
+          <div className="flex items-center justify-between text-[#64748B] text-xs">
+            <span>AVG FLEET HEALTH</span>
+            <Activity size={16} className="text-[#00F2FE]" />
           </div>
-          <div>
-            <span className="text-[10px] text-[oklch(0.55_0.01_240)] uppercase tracking-wider font-semibold block">
-              Avg Fleet Health
-            </span>
-            <span className="text-2xl font-extrabold text-white font-mono">
-              {metrics?.avgFleetHealth || 100}%
-            </span>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-black text-white">{overview?.metrics.avgFleetHealth || 100}%</span>
+            <span className="text-[10px] text-[#10B981]">Nominal</span>
           </div>
         </div>
 
-        <div className="glass rounded-2xl p-4 border border-[oklch(0.20_0.01_240)] flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
-            <ShieldAlert size={22} className={metrics?.criticalCount ? 'animate-pulse' : ''} />
+        <div className="rounded-2xl border border-[#1B1E2B] bg-[#0B0C12] p-4">
+          <div className="flex items-center justify-between text-[#64748B] text-xs">
+            <span>PENDING WORK ORDERS</span>
+            <Clock size={16} className="text-[#F59E0B]" />
           </div>
-          <div>
-            <span className="text-[10px] text-[oklch(0.55_0.01_240)] uppercase tracking-wider font-semibold block">
-              Critical Risk Machines
-            </span>
-            <span className="text-2xl font-extrabold text-rose-400 font-mono">
-              {metrics?.criticalCount || 0}
-            </span>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-black text-[#F59E0B]">{pendingCount}</span>
+            <span className="text-[10px] text-[#94A3B8]">Assigned</span>
           </div>
         </div>
 
-        <div className="glass rounded-2xl p-4 border border-[oklch(0.20_0.01_240)] flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <AlertTriangle size={22} />
+        <div className="rounded-2xl border border-[#1B1E2B] bg-[#0B0C12] p-4">
+          <div className="flex items-center justify-between text-[#64748B] text-xs">
+            <span>COMPLETED & VERIFIED</span>
+            <CheckCircle2 size={16} className="text-[#10B981]" />
           </div>
-          <div>
-            <span className="text-[10px] text-[oklch(0.55_0.01_240)] uppercase tracking-wider font-semibold block">
-              Warning Alerts
-            </span>
-            <span className="text-2xl font-extrabold text-amber-400 font-mono">
-              {metrics?.warningCount || 0}
-            </span>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-black text-[#10B981]">{completedCount + verifiedCount}</span>
+            <span className="text-[10px] text-[#10B981]">Evidence Saved</span>
           </div>
         </div>
 
-        <div className="glass rounded-2xl p-4 border border-[oklch(0.20_0.01_240)] flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <Wrench size={22} />
+        <div className="rounded-2xl border border-[#1B1E2B] bg-[#0B0C12] p-4">
+          <div className="flex items-center justify-between text-[#64748B] text-xs">
+            <span>SEPOLIA BLOCKCHAIN TXS</span>
+            <ShieldCheck size={16} className="text-[#8B5CF6]" />
           </div>
-          <div>
-            <span className="text-[10px] text-[oklch(0.55_0.01_240)] uppercase tracking-wider font-semibold block">
-              Open Work Orders
-            </span>
-            <span className="text-2xl font-extrabold text-white font-mono">
-              {(metrics?.workOrders.pending || 0) + (metrics?.workOrders.inProgress || 0)}
-            </span>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-black text-[#8B5CF6]">{verifiedCount}</span>
+            <span className="text-[10px] text-[#8B5CF6]">Immutable Records</span>
           </div>
         </div>
       </div>
 
-      {/* Fleet Health Breakdown Bar Chart */}
-      {overview?.fleetInsights && overview.fleetInsights.length > 0 && (
-        <div className="glass rounded-2xl p-5 border border-[oklch(0.20_0.01_240)] space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-              <Activity size={16} className="text-blue-400" /> Fleet Machine Health Score Distribution
-            </h3>
-            <span className="text-[10px] text-slate-400 font-mono">0-100 INDEX</span>
-          </div>
-
-          <div className="h-44 w-full pt-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={overview.fleetInsights.slice(0, 10)} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <XAxis dataKey="machineCode" stroke="#64748B" fontSize={10} tickLine={false} />
-                <YAxis domain={[0, 100]} stroke="#64748B" fontSize={10} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#0D0E15', borderColor: '#1E2235', borderRadius: '8px', fontSize: '11px', color: '#fff' }}
-                />
-                <Bar dataKey="healthScore" radius={[4, 4, 0, 0]}>
-                  {overview.fleetInsights.slice(0, 10).map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.healthScore < 50 ? '#F43F5E' : entry.healthScore < 75 ? '#F59E0B' : '#10B981'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs Selection */}
-      <div className="flex gap-2 border-b border-[oklch(0.18_0.009_240)] pb-1">
+      {/* Tabs Navigation */}
+      <div className="flex border-b border-[#1B1E2B] gap-4 text-xs font-bold">
         <button
-          type="button"
           onClick={() => setActiveTab('matrix')}
-          className={`px-4 py-2 text-xs font-semibold rounded-t-xl transition-all ${
-            activeTab === 'matrix'
-              ? 'bg-[oklch(0.14_0.007_240)] text-white border-t border-x border-[oklch(0.22_0.01_240)] border-b-0'
-              : 'text-[oklch(0.55_0.01_240)] hover:text-white'
-          }`}
+          className={`pb-3 transition-colors ${activeTab === 'matrix' ? 'border-b-2 border-[#00F2FE] text-[#00F2FE]' : 'text-[#64748B] hover:text-white'}`}
         >
-          Fleet Risk Matrix & AI Actions ({overview?.fleetInsights.length || 0})
+          AI FLEET HEALTH MATRIX ({overview?.fleetInsights.length || 0})
         </button>
         <button
-          type="button"
           onClick={() => setActiveTab('work_orders')}
-          className={`px-4 py-2 text-xs font-semibold rounded-t-xl transition-all ${
-            activeTab === 'work_orders'
-              ? 'bg-[oklch(0.14_0.007_240)] text-white border-t border-x border-[oklch(0.22_0.01_240)] border-b-0'
-              : 'text-[oklch(0.55_0.01_240)] hover:text-white'
-          }`}
+          className={`pb-3 transition-colors ${activeTab === 'work_orders' ? 'border-b-2 border-[#00F2FE] text-[#00F2FE]' : 'text-[#64748B] hover:text-white'}`}
         >
-          Work Orders Log ({workOrders.length})
+          WORK ORDERS LIFECYCLE ({workOrders.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('workforce')}
+          className={`pb-3 transition-colors ${activeTab === 'workforce' ? 'border-b-2 border-[#00F2FE] text-[#00F2FE]' : 'text-[#64748B] hover:text-white'}`}
+        >
+          WORKFORCE & ROLES (RBAC)
+        </button>
+        <button
+          onClick={() => setActiveTab('timeline')}
+          className={`pb-3 transition-colors ${activeTab === 'timeline' ? 'border-b-2 border-[#00F2FE] text-[#00F2FE]' : 'text-[#64748B] hover:text-white'}`}
+        >
+          MACHINE TIMELINE & SEPOLIA PROOF
         </button>
       </div>
 
-      {/* TAB 1: Fleet Risk Matrix */}
+      {/* Tab 1: AI Fleet Matrix */}
       {activeTab === 'matrix' && (
-        <div className="space-y-4">
-          {loading ? (
-            <div className="glass rounded-2xl p-12 text-center text-slate-400 animate-pulse">
-              Loading predictive analytics...
-            </div>
-          ) : !overview?.fleetInsights || overview.fleetInsights.length === 0 ? (
-            <div className="glass rounded-2xl p-12 text-center text-slate-400">
-              No machine data available. Register machines to begin predictive monitoring.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {overview.fleetInsights.map((insight) => (
-                <div
-                  key={insight.machineId}
-                  className={`glass rounded-2xl p-5 border transition-all ${
-                    insight.healthScore < 50
-                      ? 'border-rose-500/40 bg-rose-500/5'
-                      : insight.healthScore < 75
-                      ? 'border-amber-500/30 bg-amber-500/5'
-                      : 'border-[oklch(0.20_0.01_240)]'
-                  }`}
-                >
-                  <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-                    {/* Machine info */}
-                    <div className="space-y-1 min-w-[220px]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-4">
+            <div className="rounded-2xl border border-[#1B1E2B] bg-[#0B0C12] p-5">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-4">
+                CRITICAL & HIGH-RISK ASSETS REQUIRING ATTENTION
+              </h3>
+
+              <div className="space-y-3">
+                {overview?.fleetInsights.map((insight) => (
+                  <div
+                    key={insight.machineId}
+                    className="flex flex-wrap items-center justify-between p-4 rounded-xl border border-[#181B28] bg-[#0E101A] gap-4"
+                  >
+                    <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-[oklch(0.62_0.20_240)] px-2 py-0.5 rounded bg-[oklch(0.52_0.24_240/0.12)] border border-[oklch(0.52_0.24_240/0.25)]">
-                          {insight.machineCode}
+                        <span className="font-bold text-white text-sm">{insight.name}</span>
+                        <span className="text-[10px] text-[#64748B]">({insight.machineCode})</span>
+                        <span
+                          className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                            insight.healthScore < 50
+                              ? 'bg-[#EF4444]/10 border-[#EF4444]/30 text-[#EF4444]'
+                              : insight.healthScore < 75
+                              ? 'bg-[#F59E0B]/10 border-[#F59E0B]/30 text-[#F59E0B]'
+                              : 'bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]'
+                          }`}
+                        >
+                          {insight.healthStatus} ({insight.healthScore}%)
                         </span>
-                        <span className="text-xs text-[oklch(0.55_0.01_240)]">{insight.type}</span>
                       </div>
-                      <h3 className="text-base font-bold text-white leading-tight">{insight.name}</h3>
-                      <p className="text-[11px] text-[oklch(0.50_0.01_240)]">
-                        {[insight.department, insight.plant].filter(Boolean).join(' · ')}
+                      <p className="text-xs text-[#94A3B8] mt-1">
+                        RSOT: <span className="text-[#00F2FE]">{insight.rsot}</span> · Plant: {insight.plant || 'General'}
                       </p>
                     </div>
 
-                    {/* Health Score Gauge */}
-                    <div className="flex items-center gap-4">
-                      <div className="text-center">
-                        <span className="text-[10px] text-[oklch(0.50_0.01_240)] uppercase tracking-wider block font-medium">
-                          Health Score
-                        </span>
-                        <span
-                          className={`text-2xl font-extrabold font-mono ${
-                            insight.healthScore < 50
-                              ? 'text-rose-400'
-                              : insight.healthScore < 75
-                              ? 'text-amber-400'
-                              : 'text-emerald-400'
-                          }`}
-                        >
-                          {insight.healthScore}%
-                        </span>
-                      </div>
-
-                      <div className="text-center">
-                        <span className="text-[10px] text-[oklch(0.50_0.01_240)] uppercase tracking-wider block font-medium">
-                          RSOT Estimate
-                        </span>
-                        <span className="text-sm font-bold text-white font-mono block mt-1">
-                          {insight.rsot}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* AI Recommendations */}
-                    <div className="flex-1 min-w-0 bg-[oklch(0.12_0.007_240)] p-3 rounded-xl border border-[oklch(0.18_0.008_240)]">
-                      {insight.recommendations.length > 0 ? (
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block">
-                            AI Action Recommended:
-                          </span>
-                          <p className="text-xs font-semibold text-white">
-                            {insight.recommendations[0].title}
-                          </p>
-                          <p className="text-[11px] text-[oklch(0.60_0.01_240)] line-clamp-1">
-                            {insight.recommendations[0].action}
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-emerald-400 font-medium flex items-center gap-1.5">
-                          <CheckCircle2 size={14} /> System operating within nominal parameters.
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Action Button */}
                     <button
-                      type="button"
                       onClick={() => handleOpenWOModal(insight)}
-                      className="px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center gap-1.5 shrink-0"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#141724] border border-[#262A3E] text-xs font-semibold text-[#00F2FE] hover:bg-[#1E2336] px-3 py-1.5 transition-all"
                     >
-                      <Wrench size={13} />
-                      Log Work Order
+                      <Plus size={13} /> CONVERT TO WORK ORDER
                     </button>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          )}
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-[#1B1E2B] bg-[#0B0C12] p-5">
+              <h3 className="text-xs font-bold text-[#94A3B8] uppercase mb-4">WORK ORDERS BREAKDOWN</h3>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <XAxis dataKey="name" stroke="#64748B" fontSize={10} />
+                    <YAxis stroke="#64748B" fontSize={10} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0B0C12', borderColor: '#1B1E2B', fontSize: '11px' }} />
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* TAB 2: Work Orders Log */}
+      {/* Tab 2: Work Orders Lifecycle */}
       {activeTab === 'work_orders' && (
-        <div className="glass rounded-2xl p-5 border border-[oklch(0.20_0.01_240)] space-y-4">
-          <h3 className="text-sm font-bold text-white">Dispatched Work Orders</h3>
-
-          {workOrders.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 text-xs">
-              No work orders created yet.
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-[#1B1E2B] bg-[#0B0C12] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#1B1E2B] bg-[#0D0E15] flex justify-between items-center">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                MAINTENANCE WORK ORDERS & SEPOLIA BLOCKCHAIN VERIFICATION
+              </h3>
+              <span className="text-xs text-[#94A3B8]">Total: {workOrders.length}</span>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {workOrders.map((wo) => (
-                <div
-                  key={wo._id}
-                  className="p-4 rounded-xl bg-[oklch(0.12_0.007_240)] border border-[oklch(0.18_0.008_240)] flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-cyan-400">{wo.workOrderNumber}</span>
-                      <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                        {wo.type}
-                      </span>
-                      <span
-                        className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
-                          wo.priority === 'urgent'
-                            ? 'bg-rose-500/20 text-rose-300'
-                            : wo.priority === 'high'
-                            ? 'bg-amber-500/20 text-amber-300'
-                            : 'bg-slate-700 text-slate-300'
-                        }`}
-                      >
-                        {wo.priority}
-                      </span>
-                    </div>
-                    <h4 className="text-sm font-bold text-white">{wo.title}</h4>
-                    <p className="text-xs text-[oklch(0.55_0.01_240)] line-clamp-1">{wo.description}</p>
-                    <p className="text-[11px] text-[oklch(0.45_0.01_240)]">
-                      Machine: <strong className="text-white">{wo.machineId?.name}</strong> ({wo.machineId?.machineCode})
-                    </p>
-                  </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
-                    <select
-                      value={wo.status}
-                      onChange={(e) => handleUpdateWOStatus(wo._id, e.target.value)}
-                      className={`text-xs font-bold rounded-lg px-3 py-1.5 bg-slate-900 border text-white ${
-                        wo.status === 'completed'
-                          ? 'border-emerald-500 text-emerald-400'
-                          : wo.status === 'in_progress'
-                          ? 'border-blue-500 text-blue-400'
-                          : 'border-slate-700'
-                      }`}
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="completed">Completed</option>
-                      <option value="cancelled">Cancelled</option>
-                    </select>
-                  </div>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[#181B28] bg-[#0A0B10] text-[#64748B]">
+                    <th className="px-4 py-3 text-left font-bold">WO CODE</th>
+                    <th className="px-4 py-3 text-left font-bold">MACHINE</th>
+                    <th className="px-4 py-3 text-left font-bold">TITLE</th>
+                    <th className="px-4 py-3 text-left font-bold">PRIORITY</th>
+                    <th className="px-4 py-3 text-left font-bold">STATUS & WORKFLOW</th>
+                    <th className="px-4 py-3 text-right font-bold">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#181B28]">
+                  {workOrders.map((wo) => (
+                    <tr key={wo._id} className="hover:bg-[#121420]/50 transition-colors">
+                      <td className="px-4 py-3 font-bold text-[#00F2FE]">{wo.workOrderNumber}</td>
+                      <td className="px-4 py-3 text-white">{wo.machineId?.name || 'Machine'}</td>
+                      <td className="px-4 py-3 text-[#94A3B8] max-w-xs truncate">{wo.title}</td>
+                      <td className="px-4 py-3">
+                        <span className="uppercase text-[10px] font-bold text-[#F59E0B] px-2 py-0.5 rounded bg-[#F59E0B]/10">
+                          {wo.priority}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              wo.status === 'verified'
+                                ? 'bg-[#8B5CF6]/10 text-[#8B5CF6] border border-[#8B5CF6]/30'
+                                : wo.status === 'completed'
+                                ? 'bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/30'
+                                : 'bg-[#F59E0B]/10 text-[#F59E0B]'
+                            }`}
+                          >
+                            {wo.status}
+                          </span>
+                          {wo.ipfsCid && (
+                            <span className="text-[10px] text-[#00F2FE]" title={`IPFS CID: ${wo.ipfsCid}`}>
+                              [IPFS CID]
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right space-x-2">
+                        {wo.status === 'pending' || wo.status === 'in_progress' || wo.status === 'assigned' ? (
+                          <button
+                            onClick={() => handleOpenCompleteModal(wo)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-[#10B981] hover:underline"
+                          >
+                            <CheckCircle2 size={13} /> COMPLETE REPAIR
+                          </button>
+                        ) : wo.status === 'completed' ? (
+                          <button
+                            onClick={() => handleVerifyWorkOrder(wo._id)}
+                            disabled={verifyingWOId === wo._id}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-[#8B5CF6] hover:underline disabled:opacity-50"
+                          >
+                            {verifyingWOId === wo._id ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : (
+                              <ShieldCheck size={13} />
+                            )}
+                            VERIFY ON SEPOLIA
+                          </button>
+                        ) : (
+                          <a
+                            href={`https://sepolia.etherscan.io/tx/${wo.blockchainTxHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-[#00F2FE] hover:underline"
+                          >
+                            <ExternalLink size={13} /> SEPOLIA TX
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
         </div>
       )}
 
-      {/* Create Work Order Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="glass rounded-2xl p-6 max-w-lg w-full border border-[oklch(0.22_0.01_240)] space-y-4">
-            <div className="flex items-center justify-between border-b border-[oklch(0.18_0.008_240)] pb-3">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Wrench size={18} className="text-[oklch(0.62_0.20_240)]" />
-                Dispatch Work Order
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-white"
-              >
-                <X size={18} />
+      {/* Tab 3: Workforce & Roles (RBAC) */}
+      {activeTab === 'workforce' && (
+        <div className="rounded-2xl border border-[#1B1E2B] bg-[#0B0C12] p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-[#1B1E2B] pb-3">
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <Users size={16} className="text-[#00F2FE]" /> WORKFORCE & ROLE-BASED ACCESS CONTROL (RBAC)
+            </h3>
+            <span className="text-xs text-[#10B981]">Active RBAC System</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="rounded-xl border border-[#181B28] bg-[#0D0E15] p-4 space-y-2">
+              <span className="text-[10px] font-bold text-[#EF4444] uppercase tracking-wider">ADMIN / MANAGER</span>
+              <h4 className="text-sm font-bold text-white">Full System Access</h4>
+              <p className="text-xs text-[#94A3B8]">Registers machines, assigns engineers, signs Sepolia transactions, manages AI models.</p>
+            </div>
+
+            <div className="rounded-xl border border-[#181B28] bg-[#0D0E15] p-4 space-y-2">
+              <span className="text-[10px] font-bold text-[#F59E0B] uppercase tracking-wider">MAINTENANCE MANAGER</span>
+              <h4 className="text-sm font-bold text-white">Work Order & Verification</h4>
+              <p className="text-xs text-[#94A3B8]">Creates work orders, schedules maintenance, verifies IPFS evidence & Sepolia records.</p>
+            </div>
+
+            <div className="rounded-xl border border-[#181B28] bg-[#0D0E15] p-4 space-y-2">
+              <span className="text-[10px] font-bold text-[#00F2FE] uppercase tracking-wider">MAINTENANCE ENGINEER</span>
+              <h4 className="text-sm font-bold text-white">Repair Execution</h4>
+              <p className="text-xs text-[#94A3B8]">Views assigned tasks, completes repairs, uploads photos/videos to IPFS.</p>
+            </div>
+
+            <div className="rounded-xl border border-[#181B28] bg-[#0D0E15] p-4 space-y-2">
+              <span className="text-[10px] font-bold text-[#10B981] uppercase tracking-wider">OPERATOR</span>
+              <h4 className="text-sm font-bold text-white">Machine Monitoring</h4>
+              <p className="text-xs text-[#94A3B8]">Monitors live dashboards, checks RSOT timers, reports anomalies.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Machine Timeline & Sepolia Proof */}
+      {activeTab === 'timeline' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-[#94A3B8]">SELECT MACHINE:</label>
+            <select
+              value={selectedMachineTimeline}
+              onChange={(e) => setSelectedMachineTimeline(e.target.value)}
+              className="rounded-lg border border-[#1E202E] bg-[#12141F] px-3 py-1.5 text-xs text-white"
+            >
+              {machines.map((m) => (
+                <option key={m._id || m.id} value={m._id || m.id}>
+                  {m.name} ({m.machineCode})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="rounded-2xl border border-[#1B1E2B] bg-[#0B0C12] p-5 space-y-4">
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider">HISTORICAL MAINTENANCE TIMELINE</h3>
+
+            {timeline.length === 0 ? (
+              <p className="text-xs text-[#64748B]">No maintenance records recorded for this machine yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {timeline.map((record) => (
+                  <div key={record._id} className="p-4 rounded-xl border border-[#181B28] bg-[#0D0E16] space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-[#00F2FE] text-xs">{record.title}</span>
+                      <span className="text-[10px] text-[#94A3B8]">{new Date(record.completedAt).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-xs text-[#94A3B8]">{record.description}</p>
+                    <div className="flex flex-wrap items-center gap-4 text-[11px] text-[#64748B]">
+                      <span>Engineer: {record.engineerName}</span>
+                      <span>Cost: ${record.cost}</span>
+                      <span>Downtime: {record.downtimeHours}h</span>
+                      <span>Health Restored: {record.healthScoreBefore}% → {record.healthScoreAfter}%</span>
+                    </div>
+                    <div className="pt-2 flex items-center justify-between border-t border-[#181B28]">
+                      <span className="text-[10px] text-[#00F2FE]">IPFS CID: {record.ipfsCid}</span>
+                      <a
+                        href={record.etherscanUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-[#8B5CF6] hover:underline"
+                      >
+                        <ShieldCheck size={13} /> VERIFY ON SEPOLIA EXPLORER
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Create Work Order */}
+      {showWOModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-[#1B1E2B] bg-[#0D0E15] p-6 space-y-4 font-mono">
+            <div className="flex justify-between items-center border-b border-[#1B1E2B] pb-3">
+              <h3 className="text-sm font-bold text-white uppercase">CREATE MAINTENANCE WORK ORDER</h3>
+              <button onClick={() => setShowWOModal(false)} className="text-[#64748B] hover:text-white">
+                <X size={16} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateWO} className="space-y-3 text-xs">
+            <form onSubmit={handleCreateWorkOrder} className="space-y-3">
               <div>
-                <label className="text-[11px] text-slate-300 font-semibold block mb-1">Target Machine</label>
+                <label className="text-[10px] text-[#64748B]">TARGET MACHINE</label>
                 <select
-                  value={formData.machineId}
-                  onChange={(e) => setFormData({ ...formData, machineId: e.target.value })}
-                  className="w-full bg-[oklch(0.12_0.007_240)] border border-[oklch(0.22_0.01_240)] rounded-lg p-2.5 text-white"
-                  required
+                  value={woFormData.machineId}
+                  onChange={(e) => setWoFormData({ ...woFormData, machineId: e.target.value })}
+                  className="w-full rounded-lg border border-[#1E202E] bg-[#12141F] px-3 py-2 text-xs text-white mt-1"
                 >
                   {machines.map((m) => (
                     <option key={m._id || m.id} value={m._id || m.id}>
@@ -478,71 +630,129 @@ export default function MaintenanceClient() {
               </div>
 
               <div>
-                <label className="text-[11px] text-slate-300 font-semibold block mb-1">Title</label>
+                <label className="text-[10px] text-[#64748B]">TITLE</label>
                 <input
                   type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full bg-[oklch(0.12_0.007_240)] border border-[oklch(0.22_0.01_240)] rounded-lg p-2.5 text-white"
-                  placeholder="e.g. Inspect Bearing Thermal Grease"
+                  value={woFormData.title}
+                  onChange={(e) => setWoFormData({ ...woFormData, title: e.target.value })}
+                  className="w-full rounded-lg border border-[#1E202E] bg-[#12141F] px-3 py-2 text-xs text-white mt-1"
                   required
                 />
               </div>
 
               <div>
-                <label className="text-[11px] text-slate-300 font-semibold block mb-1">Description & Actions</label>
+                <label className="text-[10px] text-[#64748B]">DESCRIPTION</label>
                 <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={3}
-                  className="w-full bg-[oklch(0.12_0.007_240)] border border-[oklch(0.22_0.01_240)] rounded-lg p-2.5 text-white"
-                  placeholder="Detailed maintenance steps..."
+                  value={woFormData.description}
+                  onChange={(e) => setWoFormData({ ...woFormData, description: e.target.value })}
+                  className="w-full rounded-lg border border-[#1E202E] bg-[#12141F] px-3 py-2 text-xs text-white mt-1 h-20"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowWOModal(false)}
+                  className="px-4 py-2 text-xs text-[#94A3B8] hover:text-white"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingWO}
+                  className="px-4 py-2 rounded-lg bg-[#00F2FE] text-[#0A0B10] text-xs font-bold hover:brightness-110"
+                >
+                  {submittingWO ? 'CREATING...' : 'SUBMIT WORK ORDER'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Repair Completion & IPFS Evidence Upload */}
+      {showCompleteModal && selectedWOForComplete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-[#1B1E2B] bg-[#0D0E15] p-6 space-y-4 font-mono">
+            <div className="flex justify-between items-center border-b border-[#1B1E2B] pb-3">
+              <h3 className="text-sm font-bold text-white uppercase">
+                COMPLETE REPAIR & UPLOAD EVIDENCE ({selectedWOForComplete.workOrderNumber})
+              </h3>
+              <button onClick={() => setShowCompleteModal(false)} className="text-[#64748B] hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCompleteWorkOrder} className="space-y-3">
+              <div>
+                <label className="text-[10px] text-[#64748B]">DIAGNOSIS & ROOT CAUSE</label>
+                <input
+                  type="text"
+                  value={completeFormData.rootCause}
+                  onChange={(e) => setCompleteFormData({ ...completeFormData, rootCause: e.target.value })}
+                  className="w-full rounded-lg border border-[#1E202E] bg-[#12141F] px-3 py-2 text-xs text-white mt-1"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] text-[#64748B]">ACTION TAKEN & PARTS REPLACED</label>
+                <input
+                  type="text"
+                  value={completeFormData.partsReplaced}
+                  onChange={(e) => setCompleteFormData({ ...completeFormData, partsReplaced: e.target.value })}
+                  className="w-full rounded-lg border border-[#1E202E] bg-[#12141F] px-3 py-2 text-xs text-white mt-1"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] text-slate-300 font-semibold block mb-1">Priority</label>
-                  <select
-                    value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                    className="w-full bg-[oklch(0.12_0.007_240)] border border-[oklch(0.22_0.01_240)] rounded-lg p-2.5 text-white"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[11px] text-slate-300 font-semibold block mb-1">Due Date</label>
+                  <label className="text-[10px] text-[#64748B]">DOWNTIME (HOURS)</label>
                   <input
-                    type="date"
-                    value={formData.dueDate}
-                    onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                    className="w-full bg-[oklch(0.12_0.007_240)] border border-[oklch(0.22_0.01_240)] rounded-lg p-2.5 text-white"
-                    required
+                    type="number"
+                    step="0.5"
+                    value={completeFormData.downtimeHours}
+                    onChange={(e) => setCompleteFormData({ ...completeFormData, downtimeHours: Number(e.target.value) })}
+                    className="w-full rounded-lg border border-[#1E202E] bg-[#12141F] px-3 py-2 text-xs text-white mt-1"
                   />
                 </div>
+                <div>
+                  <label className="text-[10px] text-[#64748B]">REPAIR COST ($)</label>
+                  <input
+                    type="number"
+                    value={completeFormData.cost}
+                    onChange={(e) => setCompleteFormData({ ...completeFormData, cost: Number(e.target.value) })}
+                    className="w-full rounded-lg border border-[#1E202E] bg-[#12141F] px-3 py-2 text-xs text-white mt-1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-[#64748B]">EVIDENCE FILES (PHOTOS / DOCUMENTS FOR IPFS)</label>
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
+                  className="w-full text-xs text-[#94A3B8] mt-1"
+                />
               </div>
 
               <div className="flex justify-end gap-3 pt-3">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-700 text-slate-300"
+                  onClick={() => setShowCompleteModal(false)}
+                  className="px-4 py-2 text-xs text-[#94A3B8] hover:text-white"
                 >
-                  Cancel
+                  CANCEL
                 </button>
                 <button
                   type="submit"
-                  disabled={submittingWO}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 font-bold text-white flex items-center gap-2"
+                  disabled={completingWO}
+                  className="px-4 py-2 rounded-lg bg-[#10B981] text-[#0A0B10] text-xs font-bold hover:brightness-110"
                 >
-                  {submittingWO && <Loader2 size={13} className="animate-spin" />}
-                  Dispatch Work Order
+                  {completingWO ? 'UPLOADING TO IPFS...' : 'SAVE & UPLOAD TO IPFS'}
                 </button>
               </div>
             </form>

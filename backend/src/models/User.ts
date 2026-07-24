@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 export enum UserRole {
   SUPER_ADMIN = 'super_admin',
   COMPANY_ADMIN = 'company_admin',
+  MAINTENANCE_MANAGER = 'maintenance_manager',
   MAINTENANCE_ENGINEER = 'maintenance_engineer',
   MACHINE_OPERATOR = 'machine_operator',
 }

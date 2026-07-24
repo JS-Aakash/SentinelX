@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { Machine } from '../models/Machine';
+import { Machine, MachineStatus, AILifecycleStatus } from '../models/Machine';
 import { WorkOrder, IWorkOrder, WorkOrderStatus } from '../models/WorkOrder';
 import { PredictionHistory } from '../models/PredictionHistory';
 import { ApiError } from '../utils/ApiError';
@@ -189,6 +189,9 @@ export class MaintenanceService {
     }
 
     workOrder.status = status;
+    if (status === WorkOrderStatus.ASSIGNED && !workOrder.assignedTo) {
+      workOrder.status = WorkOrderStatus.ASSIGNED;
+    }
     if (status === WorkOrderStatus.COMPLETED) {
       workOrder.completedAt = new Date();
     }
@@ -199,5 +202,190 @@ export class MaintenanceService {
       { path: 'assignedTo', select: 'name email role' },
       { path: 'createdBy', select: 'name email' },
     ]);
+  }
+
+  /**
+   * Complete Work Order & Upload Repair Evidence to IPFS
+   */
+  public static async completeWorkOrder(
+    companyId: string,
+    workOrderId: string,
+    userId: string,
+    payload: any,
+    uploadedFiles?: Array<{ path: string; originalname: string; mimetype: string }>
+  ): Promise<IWorkOrder> {
+    const { IpfsService } = await import('./IpfsService');
+    const workOrder = await WorkOrder.findOne({ _id: workOrderId, companyId }).exec();
+    if (!workOrder) {
+      throw ApiError.notFound('Work Order not found');
+    }
+
+    // 1. Upload files to IPFS
+    const evidenceFiles: Array<{ name: string; url: string; ipfsCid: string; fileType: string; uploadedAt: Date }> = [];
+    if (uploadedFiles && uploadedFiles.length > 0) {
+      for (const file of uploadedFiles) {
+        const fileType = file.mimetype.includes('pdf') ? 'pdf' : file.mimetype.includes('video') ? 'video' : 'image';
+        const ipfsRes = await IpfsService.uploadFileToIpfs(file.path, file.originalname);
+        evidenceFiles.push({
+          name: file.originalname,
+          url: ipfsRes.pinataUrl,
+          ipfsCid: ipfsRes.cid,
+          fileType,
+          uploadedAt: new Date(),
+        });
+      }
+    }
+
+    // 2. Upload metadata report JSON to IPFS
+    const reportData = {
+      workOrderNumber: workOrder.workOrderNumber,
+      machineId: workOrder.machineId,
+      problem: payload.problem || workOrder.title,
+      diagnosis: payload.diagnosis || 'Inspected rotor, motor bearings, and thermal system',
+      rootCause: payload.rootCause || 'High friction & lubricant breakdown',
+      actionTaken: payload.actionTaken || 'Replaced motor bearings & flushed coolant',
+      partsReplaced: payload.partsReplaced ? (Array.isArray(payload.partsReplaced) ? payload.partsReplaced : [payload.partsReplaced]) : ['Motor Bearings (ISO 6208)'],
+      downtimeHours: Number(payload.downtimeHours || 1.5),
+      cost: Number(payload.cost || 250),
+      completedAt: new Date().toISOString(),
+    };
+
+    const jsonIpfsRes = await IpfsService.uploadJsonToIpfs(reportData, `${workOrder.workOrderNumber}_report.json`);
+
+    // 3. Update Work Order Document
+    workOrder.status = WorkOrderStatus.COMPLETED;
+    workOrder.completedAt = new Date();
+    workOrder.problem = reportData.problem;
+    workOrder.diagnosis = reportData.diagnosis;
+    workOrder.rootCause = reportData.rootCause;
+    workOrder.actionTaken = reportData.actionTaken;
+    workOrder.partsReplaced = reportData.partsReplaced;
+    workOrder.downtimeHours = reportData.downtimeHours;
+    workOrder.cost = reportData.cost;
+    workOrder.remarks = payload.remarks || 'Machine repaired successfully and re-tested.';
+    workOrder.nextInspectionDate = payload.nextInspectionDate ? new Date(payload.nextInspectionDate) : new Date(Date.now() + 30 * 86400000);
+    workOrder.ipfsCid = jsonIpfsRes.cid;
+
+    if (evidenceFiles.length > 0) {
+      workOrder.evidenceFiles = evidenceFiles as any;
+    }
+
+    await workOrder.save();
+    return workOrder.populate([
+      { path: 'machineId', select: 'name machineCode type plant department' },
+      { path: 'assignedTo', select: 'name email role' },
+      { path: 'createdBy', select: 'name email' },
+    ]);
+  }
+
+  /**
+   * Verify Completed Work Order & Sign Transaction on Ethereum Sepolia Testnet
+   */
+  public static async verifyWorkOrder(companyId: string, workOrderId: string, verifierUserId: string): Promise<IWorkOrder> {
+    const { BlockchainService } = await import('./BlockchainService');
+    const { MaintenanceRecord, MaintenanceActivityType } = await import('../models/MaintenanceRecord');
+
+    const workOrder = await WorkOrder.findOne({ _id: workOrderId, companyId }).exec();
+    if (!workOrder) {
+      throw ApiError.notFound('Work Order not found');
+    }
+
+    const machine = await Machine.findById(workOrder.machineId).exec();
+    if (!machine) {
+      throw ApiError.notFound('Associated machine not found');
+    }
+
+    const ipfsCid = workOrder.ipfsCid || 'QmSentinelXMaintenanceReportDefaultCid1111111';
+    const healthBefore = workOrder.healthScoreAtCreation || 65;
+    const healthAfter = 98; // Machine restored to optimal health
+
+    // 1. Sign transaction on Ethereum Sepolia Testnet via Backend Wallet
+    const chainRecord = await BlockchainService.recordMaintenanceOnChain({
+      machineId: machine.machineCode || machine._id.toString(),
+      workOrderId: workOrder.workOrderNumber,
+      engineerId: workOrder.assignedTo ? workOrder.assignedTo.toString() : verifierUserId,
+      ipfsCid,
+      healthScoreBefore: healthBefore,
+      healthScoreAfter: healthAfter,
+    });
+
+    // 2. Update Work Order state
+    workOrder.status = WorkOrderStatus.VERIFIED;
+    workOrder.blockchainTxHash = chainRecord.txHash;
+    workOrder.blockchainBlockNumber = chainRecord.blockNumber;
+    workOrder.blockchainVerified = true;
+    workOrder.blockchainVerifiedAt = new Date();
+    workOrder.verifierWallet = chainRecord.senderWallet;
+    workOrder.healthScoreBefore = healthBefore;
+    workOrder.healthScoreAfter = healthAfter;
+
+    await workOrder.save();
+
+    // 3. Create historical timeline MaintenanceRecord
+    await MaintenanceRecord.create({
+      machineId: machine._id,
+      companyId: machine.companyId,
+      workOrderId: workOrder._id,
+      activityType: MaintenanceActivityType.REPAIR,
+      title: workOrder.title,
+      description: workOrder.description,
+      engineerId: workOrder.assignedTo || verifierUserId,
+      engineerName: workOrder.assignedTo ? 'Maintenance Engineer' : 'System Verifier',
+      cost: workOrder.cost || 250,
+      durationHours: workOrder.estimatedDurationHours || 2,
+      downtimeHours: workOrder.downtimeHours || 1.5,
+      healthScoreBefore: healthBefore,
+      healthScoreAfter: healthAfter,
+      partsReplaced: workOrder.partsReplaced || ['Motor Bearings'],
+      ipfsCid,
+      blockchainTxHash: chainRecord.txHash,
+      blockchainBlockNumber: chainRecord.blockNumber,
+      blockchainVerified: true,
+      etherscanUrl: chainRecord.etherscanUrl,
+      evidenceFiles: workOrder.evidenceFiles || [],
+      completedAt: workOrder.completedAt || new Date(),
+    });
+
+    // 4. Update Machine Status & Lifecycle to AI Ready
+    machine.status = MachineStatus.ACTIVE;
+    machine.aiLifecycleStatus = AILifecycleStatus.AI_READY;
+    await machine.save();
+
+    return workOrder.populate([
+      { path: 'machineId', select: 'name machineCode type plant department' },
+      { path: 'assignedTo', select: 'name email role' },
+      { path: 'createdBy', select: 'name email' },
+    ]);
+  }
+
+  /**
+   * Get Sepolia Blockchain Explorer Logs & Verification Records
+   */
+  public static async getBlockchainExplorerLogs(companyId: string) {
+    const { MaintenanceRecord } = await import('../models/MaintenanceRecord');
+    const records = await MaintenanceRecord.find({ companyId: new mongoose.Types.ObjectId(companyId) })
+      .populate('machineId', 'name machineCode type plant')
+      .populate('engineerId', 'name email role')
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+
+    return records;
+  }
+
+  /**
+   * Get Machine Maintenance History Timeline
+   */
+  public static async getMachineHistoryTimeline(companyId: string, machineId: string) {
+    const { MaintenanceRecord } = await import('../models/MaintenanceRecord');
+    const records = await MaintenanceRecord.find({
+      companyId: new mongoose.Types.ObjectId(companyId),
+      machineId: new mongoose.Types.ObjectId(machineId),
+    })
+      .sort({ completedAt: -1 })
+      .lean()
+      .exec();
+
+    return records;
   }
 }

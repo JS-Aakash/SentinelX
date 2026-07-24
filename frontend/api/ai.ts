@@ -130,7 +130,7 @@ export const aiApi = {
     api.get<ApiResponse<AIModelStatusResponse>>(`/ai/status/${machineId}`),
 
   getHistory: (machineId: string) =>
-    api.get<ApiResponse<AIModelItem[]>>(`/ai/history/${machineId}`),
+    api.get<ApiResponse<AIModelItem[]>>(`/ai/models/history/${machineId}`),
 
   getReport: (modelId: string) =>
     api.get<ApiResponse<AIModelItem>>(`/ai/report/${modelId}`),
@@ -149,7 +149,7 @@ export const aiApi = {
     api.get<ApiResponse<PredictionRecord | null>>(`/ai/latest/${machineId}`),
 
   getPredictionHistory: (machineId: string, params?: { page?: number; limit?: number }) =>
-    api.get<ApiResponse<{ history: PredictionRecord[]; pagination: any }>>(`/ai/history/${machineId}`, { params }),
+    api.get<ApiResponse<{ history: PredictionRecord[]; pagination: any }>>(`/ai/predictions/history/${machineId}`, { params }),
 
   getForecast: (machineId: string) =>
     api.get<ApiResponse<{

@@ -13,6 +13,7 @@ import simulationRoutes from './simulation.routes';
 import maintenanceRoutes from './maintenance.routes';
 import anomalyRoutes from './anomaly.routes';
 import telemetryRoutes from './telemetry.routes';
+import blockchainRoutes from './blockchain.routes';
 
 const router = Router();
 
@@ -29,6 +30,7 @@ router.use('/simulation', simulationRoutes);
 router.use('/maintenance', maintenanceRoutes);
 router.use('/anomalies', anomalyRoutes);
 router.use('/telemetry', telemetryRoutes);
+router.use('/blockchain', blockchainRoutes);
 
 // Health check
 router.get('/health', (_req, res) => {

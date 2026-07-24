@@ -41,6 +41,14 @@ export interface MaintenanceOverview {
   fleetInsights: FleetInsight[];
 }
 
+export interface EvidenceFile {
+  name: string;
+  url: string;
+  ipfsCid: string;
+  fileType: string;
+  uploadedAt: string;
+}
+
 export interface WorkOrder {
   _id: string;
   id: string;
@@ -57,14 +65,58 @@ export interface WorkOrder {
   description: string;
   type: 'predictive' | 'preventive' | 'corrective' | 'emergency';
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'verified' | 'closed' | 'cancelled';
   assignedTo?: { _id: string; name: string; email: string; role: string };
   dueDate: string;
+  estimatedDurationHours?: number;
+  downtimeHours?: number;
+  cost?: number;
+  problem?: string;
+  diagnosis?: string;
+  rootCause?: string;
+  actionTaken?: string;
+  partsReplaced?: string[];
+  remarks?: string;
+  nextInspectionDate?: string;
+  evidenceFiles?: EvidenceFile[];
+  ipfsCid?: string;
+  blockchainTxHash?: string;
+  blockchainBlockNumber?: number;
+  blockchainVerified?: boolean;
+  blockchainVerifiedAt?: string;
+  verifierWallet?: string;
+  healthScoreBefore?: number;
+  healthScoreAfter?: number;
   aiRecommendationCode?: string;
   healthScoreAtCreation?: number;
   rsotAtCreation?: string;
   createdBy: { _id: string; name: string; email: string };
   completedAt?: string;
+  createdAt: string;
+}
+
+export interface MaintenanceRecord {
+  _id: string;
+  machineId: { _id: string; name: string; machineCode: string; type: string; plant?: string };
+  workOrderId?: string;
+  activityType: string;
+  title: string;
+  description: string;
+  engineerId: { _id: string; name: string; email: string; role: string };
+  engineerName: string;
+  cost: number;
+  durationHours: number;
+  downtimeHours: number;
+  healthScoreBefore: number;
+  healthScoreAfter: number;
+  partsReplaced: string[];
+  ipfsCid: string;
+  blockchainTxHash: string;
+  blockchainBlockNumber?: number;
+  blockchainVerified: boolean;
+  etherscanUrl: string;
+  evidenceFiles?: EvidenceFile[];
+  completedAt: string;
   createdAt: string;
 }
 
@@ -87,6 +139,20 @@ export const maintenanceApi = {
     rsotAtCreation?: string;
   }) => api.post<ApiResponse<WorkOrder>>('/maintenance/work-orders', payload),
 
-  updateStatus: (id: string, status: 'pending' | 'in_progress' | 'completed' | 'cancelled') =>
+  updateStatus: (id: string, status: string) =>
     api.patch<ApiResponse<WorkOrder>>(`/maintenance/work-orders/${id}/status`, { status }),
+
+  completeWorkOrder: (id: string, formData: FormData) =>
+    api.post<ApiResponse<WorkOrder>>(`/maintenance/work-orders/${id}/complete`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
+  verifyWorkOrder: (id: string) =>
+    api.post<ApiResponse<WorkOrder>>(`/maintenance/work-orders/${id}/verify`),
+
+  getBlockchainLogs: () =>
+    api.get<ApiResponse<MaintenanceRecord[]>>('/maintenance/blockchain/explorer'),
+
+  getTimeline: (machineId: string) =>
+    api.get<ApiResponse<MaintenanceRecord[]>>(`/maintenance/timeline/${machineId}`),
 };

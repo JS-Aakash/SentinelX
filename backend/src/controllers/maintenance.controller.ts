@@ -34,3 +34,27 @@ export const updateWorkOrderStatus = asyncHandler(async (req: Request, res: Resp
   const workOrder = await MaintenanceService.updateWorkOrderStatus(req.user!.companyId, id, status);
   sendSuccess(res, 'Work order status updated successfully', workOrder);
 });
+
+export const completeWorkOrder = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const files = (req.files as any[]) || [];
+  const workOrder = await MaintenanceService.completeWorkOrder(req.user!.companyId, id, req.user!.userId, req.body, files);
+  sendSuccess(res, 'Work order completed and evidence uploaded to IPFS successfully', workOrder);
+});
+
+export const verifyWorkOrder = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const workOrder = await MaintenanceService.verifyWorkOrder(req.user!.companyId, id, req.user!.userId);
+  sendSuccess(res, 'Work order verified and recorded on Ethereum Sepolia Testnet successfully', workOrder);
+});
+
+export const getBlockchainExplorerLogs = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const logs = await MaintenanceService.getBlockchainExplorerLogs(req.user!.companyId);
+  sendSuccess(res, 'Ethereum Sepolia blockchain explorer logs retrieved successfully', logs);
+});
+
+export const getMachineHistoryTimeline = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const machineId = req.params.machineId as string;
+  const timeline = await MaintenanceService.getMachineHistoryTimeline(req.user!.companyId, machineId);
+  sendSuccess(res, 'Machine maintenance timeline retrieved successfully', timeline);
+});

@@ -2,6 +2,8 @@ import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import { Request } from 'express';
+import path from 'path';
+import fs from 'fs';
 import { env } from '../config/env';
 import { ApiError } from '../utils/ApiError';
 
@@ -52,3 +54,23 @@ export const upload = multer({
   },
 });
 
+// Local Disk Storage for IPFS Evidence Uploads (Images, PDFs, Documents, Videos)
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const localStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+export const uploadDisk = multer({
+  storage: localStorage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+});
