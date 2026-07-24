@@ -43,6 +43,9 @@ app.use((req, _res, next) => {
   next();
 });
 
+// ─── Serve Uploaded Static Files ───────────────────────────────────────────
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
 // ─── API Routes ─────────────────────────────────────────────────────────────
 app.use('/api/v1', v1Routes);
 

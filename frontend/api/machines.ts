@@ -84,4 +84,27 @@ export const machinesApi = {
   // Train AI Model from recorded live dataset & historical dataset batch
   trainFromLiveDataset: (id: string, datasetIds?: string[]) =>
     api.post<ApiResponse<{ machine: Machine; aiModel: any }>>(`/machines/${id}/train-live`, { datasetIds }),
+
+  // ─── Digital Twin 3D Model APIs ─────────────────────────────────────────────
+  uploadDigitalTwin: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('modelFile', file);
+    return api.post<ApiResponse<Machine>>(`/machines/${id}/digital-twin/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  getDigitalTwin: (id: string) =>
+    api.get<ApiResponse<Machine['digitalTwin']>>(`/machines/${id}/digital-twin`),
+
+  deleteDigitalTwin: (id: string) =>
+    api.delete<ApiResponse<Machine>>(`/machines/${id}/digital-twin`),
+
+  replaceDigitalTwin: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('modelFile', file);
+    return api.put<ApiResponse<Machine>>(`/machines/${id}/digital-twin/replace`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };

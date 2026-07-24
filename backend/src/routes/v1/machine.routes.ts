@@ -19,7 +19,12 @@ import {
   clearMachineLiveDataset,
   downloadMachineLiveDataset,
   trainFromLiveDataset,
+  uploadDigitalTwinModel,
+  getDigitalTwinModel,
+  deleteDigitalTwinModel,
+  replaceDigitalTwinModel,
 } from '../../controllers/machine.controller';
+import { uploadDigitalTwin } from '../../middlewares/upload.middleware';
 import {
   assignDeviceToMachine,
   removeDeviceFromMachine,
@@ -73,6 +78,12 @@ router.post(
 // Device Assignment Routes (Admin + Engineer)
 router.post('/:id/device', isEngineer, assignDeviceToMachine);
 router.delete('/:id/device', isEngineer, removeDeviceFromMachine);
+
+// ─── Digital Twin 3D Model Routes ────────────────────────────────────────────
+router.get('/:id/digital-twin', getDigitalTwinModel);
+router.post('/:id/digital-twin/upload', isEngineer, uploadDigitalTwin.single('modelFile'), uploadDigitalTwinModel);
+router.put('/:id/digital-twin/replace', isEngineer, uploadDigitalTwin.single('modelFile'), replaceDigitalTwinModel);
+router.delete('/:id/digital-twin', isEngineer, deleteDigitalTwinModel);
 
 // ─── Delete (Admin only) ──────────────────────────────────────────────────────
 

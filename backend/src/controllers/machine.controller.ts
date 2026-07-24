@@ -234,3 +234,35 @@ export const trainFromLiveDataset = asyncHandler(async (req: Request, res: Respo
   }
 });
 
+// ─── Digital Twin 3D Model ───────────────────────────────────────────────────
+
+export const uploadDigitalTwinModel = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params as Record<string, string>;
+  if (!req.file) {
+    throw ApiError.badRequest('No 3D model file provided. Supported formats: .glb, .gltf, .fbx, .obj');
+  }
+  const machine = await machineService.uploadDigitalTwin(id, req.user!.companyId, req.file, req.user!.userId);
+  sendSuccess(res, '3D Digital Twin model uploaded successfully', machine);
+});
+
+export const getDigitalTwinModel = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params as Record<string, string>;
+  const digitalTwin = await machineService.getDigitalTwin(id, req.user!.companyId);
+  sendSuccess(res, 'Digital twin model metadata retrieved successfully', digitalTwin);
+});
+
+export const deleteDigitalTwinModel = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params as Record<string, string>;
+  const machine = await machineService.deleteDigitalTwin(id, req.user!.companyId);
+  sendSuccess(res, '3D Digital Twin model deleted successfully', machine);
+});
+
+export const replaceDigitalTwinModel = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params as Record<string, string>;
+  if (!req.file) {
+    throw ApiError.badRequest('No 3D model file provided for replacement');
+  }
+  const machine = await machineService.replaceDigitalTwin(id, req.user!.companyId, req.file, req.user!.userId);
+  sendSuccess(res, '3D Digital Twin model replaced successfully', machine);
+});
+

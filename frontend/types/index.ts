@@ -156,6 +156,17 @@ export interface LiveDataCollection {
   newSamplesSinceLastTraining: number;
 }
 
+export interface DigitalTwin {
+  hasModel: boolean;
+  modelName?: string | null;
+  modelUrl?: string | null;
+  modelFormat?: string | null;
+  modelSize?: number;
+  uploadedAt?: string | null;
+  uploadedBy?: User | string | null;
+  version: number;
+}
+
 export interface MachineOperatingLimits {
   maxTemperature?: number;
   maxVibration?: number;
@@ -189,6 +200,7 @@ export interface Machine {
   dataSourcePreference?: DataSourcePreference;
   isRecording?: boolean;
   liveDataCollection?: LiveDataCollection;
+  digitalTwin?: DigitalTwin;
   ratedRPM?: number | null;
   ratedVoltage?: number | null;
   ratedCurrent?: number | null;

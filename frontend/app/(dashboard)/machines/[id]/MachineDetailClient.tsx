@@ -37,6 +37,7 @@ import { AILifecycleBadge } from '@/components/machines/AILifecycleBadge';
 import { DataCollectionCard } from '@/components/machines/DataCollectionCard';
 import { DeviceStatusBadge } from '@/components/devices/DeviceStatusBadge';
 import { AssignDeviceModal } from '@/components/devices/AssignDeviceModal';
+import { DigitalTwinCard } from '@/components/machines/DigitalTwinCard';
 import { LiveMonitoringTab } from '@/components/telemetry/LiveMonitoringTab';
 import { HistoricalDataTab } from '@/components/datasets/HistoricalDataTab';
 import { AIModelTab } from '@/components/ai/AIModelTab';
@@ -316,6 +317,9 @@ export default function MachineDetailClient({ id }: { id: string }) {
           )}
         </div>
       </div>
+
+      {/* ─── Machine Digital Twin (3D Model) Section ────────────────────────── */}
+      <DigitalTwinCard machine={machine} canWrite={canWrite} onUpdate={() => fetchMachine(id)} />
 
       {/* ─── Live Data Acquisition & Recording Control Card ──────────────── */}
       <DataCollectionCard machine={machine} onRefresh={() => fetchMachine(id)} />

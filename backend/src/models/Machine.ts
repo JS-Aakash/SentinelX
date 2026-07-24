@@ -57,6 +57,17 @@ export interface ILiveDataCollection {
   newSamplesSinceLastTraining: number;
 }
 
+export interface IDigitalTwin {
+  hasModel: boolean;
+  modelName?: string | null;
+  modelUrl?: string | null;
+  modelFormat?: string | null;
+  modelSize?: number;
+  uploadedAt?: Date | null;
+  uploadedBy?: mongoose.Types.ObjectId | null;
+  version: number;
+}
+
 export interface IMachine extends Document {
   _id: mongoose.Types.ObjectId;
   uuid: string;
@@ -79,6 +90,7 @@ export interface IMachine extends Document {
   dataSourcePreference: DataSourcePreference;
   isRecording: boolean;
   liveDataCollection: ILiveDataCollection;
+  digitalTwin: IDigitalTwin;
   ratedRPM?: number;
   ratedVoltage?: number;
   ratedCurrent?: number;
@@ -105,6 +117,20 @@ const OperatingLimitsSchema = new Schema<IOperatingLimits>(
     failureTemperature: { type: Number, min: 0 },
     failureVibration: { type: Number, min: 0 },
     failureCurrent: { type: Number, min: 0 },
+  },
+  { _id: false }
+);
+
+const DigitalTwinSchema = new Schema<IDigitalTwin>(
+  {
+    hasModel: { type: Boolean, default: false },
+    modelName: { type: String, default: null },
+    modelUrl: { type: String, default: null },
+    modelFormat: { type: String, default: null },
+    modelSize: { type: Number, default: 0 },
+    uploadedAt: { type: Date, default: null },
+    uploadedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    version: { type: Number, default: 1 },
   },
   { _id: false }
 );
@@ -211,6 +237,19 @@ const MachineSchema = new Schema<IMachine>(
       lastReadingTimestamp: { type: Date, default: null },
       recommendedSamplesThreshold: { type: Number, default: 10000 },
       newSamplesSinceLastTraining: { type: Number, default: 0 },
+    },
+    digitalTwin: {
+      type: DigitalTwinSchema,
+      default: {
+        hasModel: false,
+        modelName: null,
+        modelUrl: null,
+        modelFormat: null,
+        modelSize: 0,
+        uploadedAt: null,
+        uploadedBy: null,
+        version: 1,
+      },
     },
     ratedRPM: { type: Number, min: 0, default: null },
     ratedVoltage: { type: Number, min: 0, default: null },

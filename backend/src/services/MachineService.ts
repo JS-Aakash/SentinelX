@@ -138,6 +138,127 @@ export class MachineService {
     ]);
     return { types, plants, departments };
   }
+
+  // ─── Digital Twin 3D Model ───────────────────────────────────────────────────
+
+  async uploadDigitalTwin(
+    machineId: string,
+    companyId: string,
+    file: Express.Multer.File,
+    userId: string
+  ): Promise<IMachine> {
+    const machine = await this.getMachineById(machineId, companyId);
+    const path = require('path');
+    const ext = path.extname(file.originalname).replace('.', '').toLowerCase();
+    const modelUrl = `/uploads/digital-twins/${file.filename}`;
+
+    const currentVersion = machine.digitalTwin?.version ?? 1;
+
+    machine.digitalTwin = {
+      hasModel: true,
+      modelName: file.originalname,
+      modelUrl,
+      modelFormat: ext.toUpperCase(),
+      modelSize: file.size,
+      uploadedAt: new Date(),
+      uploadedBy: new mongoose.Types.ObjectId(userId),
+      version: currentVersion,
+    };
+
+    await machine.save();
+    return machine;
+  }
+
+  async getDigitalTwin(machineId: string, companyId: string) {
+    const machine = await this.getMachineById(machineId, companyId);
+    return machine.digitalTwin || {
+      hasModel: false,
+      modelName: null,
+      modelUrl: null,
+      modelFormat: null,
+      modelSize: 0,
+      uploadedAt: null,
+      uploadedBy: null,
+      version: 1,
+    };
+  }
+
+  async deleteDigitalTwin(machineId: string, companyId: string): Promise<IMachine> {
+    const machine = await this.getMachineById(machineId, companyId);
+    if (!machine.digitalTwin?.hasModel) {
+      throw ApiError.badRequest('Machine does not have an uploaded 3D digital twin model');
+    }
+
+    // Try deleting physical file from disk if local path
+    if (machine.digitalTwin.modelUrl?.startsWith('/uploads/')) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const localPath = path.join(process.cwd(), machine.digitalTwin.modelUrl);
+        if (fs.existsSync(localPath)) {
+          fs.unlinkSync(localPath);
+        }
+      } catch (e) {
+        console.warn('[MachineService] Failed to delete digital twin file:', e);
+      }
+    }
+
+    machine.digitalTwin = {
+      hasModel: false,
+      modelName: null,
+      modelUrl: null,
+      modelFormat: null,
+      modelSize: 0,
+      uploadedAt: null,
+      uploadedBy: null,
+      version: (machine.digitalTwin.version || 1),
+    };
+
+    await machine.save();
+    return machine;
+  }
+
+  async replaceDigitalTwin(
+    machineId: string,
+    companyId: string,
+    file: Express.Multer.File,
+    userId: string
+  ): Promise<IMachine> {
+    const machine = await this.getMachineById(machineId, companyId);
+    const path = require('path');
+    const ext = path.extname(file.originalname).replace('.', '').toLowerCase();
+    const modelUrl = `/uploads/digital-twins/${file.filename}`;
+
+    // Clean up old file if exists
+    if (machine.digitalTwin?.modelUrl?.startsWith('/uploads/')) {
+      try {
+        const fs = require('fs');
+        const localPath = path.join(process.cwd(), machine.digitalTwin.modelUrl);
+        if (fs.existsSync(localPath)) {
+          fs.unlinkSync(localPath);
+        }
+      } catch (e) {
+        console.warn('[MachineService] Failed to cleanup old digital twin file:', e);
+      }
+    }
+
+    const newVersion = (machine.digitalTwin?.version || 0) + 1;
+
+    machine.digitalTwin = {
+      hasModel: true,
+      modelName: file.originalname,
+      modelUrl,
+      modelFormat: ext.toUpperCase(),
+      modelSize: file.size,
+      uploadedAt: new Date(),
+      uploadedBy: new mongoose.Types.ObjectId(userId),
+      version: newVersion,
+    };
+
+    await machine.save();
+    return machine;
+  }
 }
 
 export const machineService = new MachineService();
+

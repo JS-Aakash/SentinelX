@@ -74,3 +74,41 @@ export const uploadDisk = multer({
   storage: localStorage,
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
 });
+
+// Local Disk Storage for 3D Digital Twin Models (.glb, .gltf, .fbx, .obj)
+const digitalTwinsDir = path.join(uploadsDir, 'digital-twins');
+if (!fs.existsSync(digitalTwinsDir)) {
+  fs.mkdirSync(digitalTwinsDir, { recursive: true });
+}
+
+const digitalTwinStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, digitalTwinsDir);
+  },
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, 'digital-twin-' + uniqueSuffix + ext);
+  },
+});
+
+const digitalTwinFilter = (
+  _req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
+  const allowedExts = ['.glb', '.gltf', '.fbx', '.obj'];
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (allowedExts.includes(ext)) {
+    cb(null, true);
+  } else {
+    cb(new ApiError(400, `Invalid file format ${ext}. Allowed formats: GLB, GLTF, FBX, OBJ`));
+  }
+};
+
+export const uploadDigitalTwin = multer({
+  storage: digitalTwinStorage,
+  fileFilter: digitalTwinFilter,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+});
+
