@@ -98,9 +98,9 @@ export function DigitalTwinViewerModal({
           if ((child as THREE.Mesh).isMesh) {
             const mesh = child as THREE.Mesh;
             if (Array.isArray(mesh.material)) {
-              mesh.material.forEach((mat) => (mat.wireframe = next));
-            } else if (mesh.material) {
-              mesh.material.wireframe = next;
+              mesh.material.forEach((mat: any) => { if ('wireframe' in mat) mat.wireframe = next; });
+            } else if (mesh.material && 'wireframe' in mesh.material) {
+              (mesh.material as any).wireframe = next;
             }
           }
         });
