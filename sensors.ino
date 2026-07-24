@@ -160,6 +160,35 @@ void calibrateZeroAndNoise()
     Serial.printf("Calibrated Zero Offset: %.2f mV | Noise Var: %.6f A^2\n", zeroOffsetMv, R_meas);
 }
 
+float readCurrentRMS()
+{
+    unsigned long start = millis();
+    uint32_t samplesCount = 0;
+    double sumSqDiff = 0;
+
+    // Sample over 40ms (covers 2 full 50Hz AC cycles)
+    while (millis() - start < 40)
+    {
+        float mv = (float)analogReadMilliVolts(CURRENT_PIN);
+        float diff_A = (mv - zeroOffsetMv) / ACS712_SENS_MV_PER_A;
+        sumSqDiff += (diff_A * diff_A);
+        samplesCount++;
+        delayMicroseconds(100);
+    }
+
+    if (samplesCount == 0) return 0.0f;
+
+    float rmsCurrent = (float)sqrt(sumSqDiff / samplesCount);
+
+    // Micro noise floor threshold for idle 0A load
+    if (rmsCurrent < 0.06f)
+    {
+        rmsCurrent = 0.0f;
+    }
+
+    return rmsCurrent;
+}
+
 float updateCurrentReading()
 {
     unsigned long now = millis();
@@ -167,22 +196,11 @@ float updateCurrentReading()
     if (dt <= 0) dt = 0.01f;
     lastKalmanTime = now;
 
-    float rawMv = readOversampledMilliVolts();
-    float cleanMv = filterOutlier(rawMv);
-    
-    // Subtract calibrated zero-current voltage
-    float rawCurrent = (cleanMv - zeroOffsetMv) / ACS712_SENS_MV_PER_A;
+    float rawRms = readCurrentRMS();
 
-    // Small deadband to clear idle micro noise
-    if (fabsf(rawCurrent) < 0.08f)
-    {
-        rawCurrent = 0.0f;
-    }
+    kalmanUpdate(rawRms, dt);
 
-    kalmanUpdate(rawCurrent, dt);
-
-    // Current magnitude cannot be negative for AC/DC load monitoring
-    if (x_current < 0.0f) x_current = 0.0f;
+    if (x_current < 0.02f) x_current = 0.0f;
 
     return x_current;
 }
