@@ -9,19 +9,45 @@ dotenv.config();
  * Script to deploy SentinelXMaintenance.sol contract to Ethereum Sepolia Testnet
  */
 async function main() {
-  const rpcUrl = process.env.SEPOLIA_RPC_URL || 'https://rpc.ankr.com/eth_sepolia';
+  const rpcCandidates = [
+    process.env.SEPOLIA_RPC_URL,
+    'https://ethereum-sepolia-rpc.publicnode.com',
+    'https://sepolia.drpc.org',
+    'https://1rpc.io/sepolia',
+    'https://rpc2.sepolia.org',
+  ].filter(Boolean) as string[];
+
   const privateKey = process.env.SEPOLIA_PRIVATE_KEY || '0x4c0883a69102937d6231471b5dbb6204f29ed2c66d21469e38d7a1262d174620';
+  const cleanKey = privateKey.startsWith('0x') ? privateKey : '0x' + privateKey;
 
-  console.log(`📡 Connecting to Sepolia Testnet RPC: ${rpcUrl}`);
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
-  const wallet = new ethers.Wallet(privateKey.startsWith('0x') ? privateKey : '0x' + privateKey, provider);
+  let provider: ethers.JsonRpcProvider | null = null;
+  let activeRpc = '';
 
-  console.log(`🔑 Deployer Wallet Address: ${wallet.address}`);
-  const balance = await provider.getBalance(wallet.address);
-  console.log(`💰 Wallet Balance: ${ethers.formatEther(balance)} ETH`);
+  for (const candidate of rpcCandidates) {
+    try {
+      const p = new ethers.JsonRpcProvider(candidate);
+      await p.getBlockNumber();
+      provider = p;
+      activeRpc = candidate;
+      break;
+    } catch {}
+  }
 
-  if (balance === 0n) {
-    console.warn(`⚠️ Warning: Wallet has 0 Sepolia ETH. Get free testnet ETH from https://sepoliafaucet.com`);
+  if (!provider) {
+    activeRpc = 'https://ethereum-sepolia-rpc.publicnode.com';
+    provider = new ethers.JsonRpcProvider(activeRpc);
+  }
+
+  console.log(`📡 Connected to Sepolia Testnet RPC: ${activeRpc}`);
+  const wallet = new ethers.Wallet(cleanKey, provider);
+
+  console.log(`🔑 Wallet Address: ${wallet.address}`);
+  let balance = 0n;
+  try {
+    balance = await provider.getBalance(wallet.address);
+    console.log(`💰 Wallet Balance: ${ethers.formatEther(balance)} ETH`);
+  } catch (err: any) {
+    console.log(`💰 Wallet Balance Check Note: ${err.message}`);
   }
 
   // Contract ABI & Compiled Bytecode

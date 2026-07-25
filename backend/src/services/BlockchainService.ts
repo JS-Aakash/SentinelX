@@ -17,8 +17,15 @@ export interface BlockchainTransactionRecord {
 }
 
 export class BlockchainService {
-  // Public Sepolia RPC Endpoints
-  private static SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL || 'https://rpc.ankr.com/eth_sepolia';
+  // Public Sepolia RPC Endpoints with High-Availability Fallback
+  private static SEPOLIA_RPC_URLS = [
+    process.env.SEPOLIA_RPC_URL,
+    'https://ethereum-sepolia-rpc.publicnode.com',
+    'https://sepolia.drpc.org',
+    'https://1rpc.io/sepolia',
+    'https://rpc2.sepolia.org',
+  ].filter(Boolean) as string[];
+
   private static SEPOLIA_PRIVATE_KEY = process.env.SEPOLIA_PRIVATE_KEY || '0x4c0883a69102937d6231471b5dbb6204f29ed2c66d21469e38d7a1262d174620';
   private static CONTRACT_ADDRESS = process.env.SEPOLIA_CONTRACT_ADDRESS || '0x7120B5a3962F7642646279E53F992C88cEa72513';
 
@@ -33,16 +40,30 @@ export class BlockchainService {
   ];
 
   /**
-   * Get Ethers Signer initialized with backend wallet key
+   * Get Ethers Signer initialized with backend wallet key across high-availability RPC list
    */
-  private static getSigner(): { provider: ethers.JsonRpcProvider; wallet: ethers.Wallet } {
-    const provider = new ethers.JsonRpcProvider(this.SEPOLIA_RPC_URL);
+  private static async getSigner(): Promise<{ provider: ethers.JsonRpcProvider; wallet: ethers.Wallet; activeRpc: string }> {
     let privateKey = this.SEPOLIA_PRIVATE_KEY;
     if (!privateKey.startsWith('0x')) {
       privateKey = '0x' + privateKey;
     }
+
+    for (const rpcUrl of this.SEPOLIA_RPC_URLS) {
+      try {
+        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        await provider.getBlockNumber(); // Test RPC connection
+        const wallet = new ethers.Wallet(privateKey, provider);
+        return { provider, wallet, activeRpc: rpcUrl };
+      } catch (err: any) {
+        logger.warn(`Sepolia RPC (${rpcUrl}) un-responsive: ${err.message}. Trying next fallback RPC...`);
+      }
+    }
+
+    // Default fallback provider
+    const fallbackRpc = 'https://ethereum-sepolia-rpc.publicnode.com';
+    const provider = new ethers.JsonRpcProvider(fallbackRpc);
     const wallet = new ethers.Wallet(privateKey, provider);
-    return { provider, wallet };
+    return { provider, wallet, activeRpc: fallbackRpc };
   }
 
   /**
@@ -59,8 +80,8 @@ export class BlockchainService {
     const { machineId, workOrderId, engineerId, ipfsCid, healthScoreBefore = 75, healthScoreAfter = 98 } = params;
 
     try {
-      const { wallet } = this.getSigner();
-      logger.info(`📡 Connecting to Ethereum Sepolia RPC (${this.SEPOLIA_RPC_URL}) with Wallet: ${wallet.address}...`);
+      const { wallet, activeRpc } = await this.getSigner();
+      logger.info(`📡 Connected to Ethereum Sepolia RPC (${activeRpc}) with Wallet: ${wallet.address}...`);
 
       const contract = new ethers.Contract(this.CONTRACT_ADDRESS, this.CONTRACT_ABI, wallet);
 
