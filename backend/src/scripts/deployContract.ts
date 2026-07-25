@@ -62,7 +62,7 @@ async function main() {
   ];
 
   console.log(`📄 SentinelXMaintenance.sol Smart Contract Ready.`);
-  console.log(`ℹ️ Configured Contract Address: ${process.env.SEPOLIA_CONTRACT_ADDRESS || '0x7120B5a3962F7642646279E53F992C88cEa72513'}`);
+  console.log(`ℹ️ Configured Contract Address: ${process.env.SEPOLIA_CONTRACT_ADDRESS || '0xD1207e60058C6eF8d56E81B61947EE8e9b6264d9'}`);
 }
 
 main().catch((err) => {

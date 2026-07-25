@@ -28,7 +28,7 @@ export class BlockchainService {
 
   private static SEPOLIA_PRIVATE_KEY = process.env.SEPOLIA_PRIVATE_KEY || '0x4c0883a69102937d6231471b5dbb6204f29ed2c66d21469e38d7a1262d174620';
   private static get CONTRACT_ADDRESS(): string {
-    const raw = process.env.SEPOLIA_CONTRACT_ADDRESS || '0x7120B5a3962F7642646279E53F992C88cEa72513';
+    const raw = process.env.SEPOLIA_CONTRACT_ADDRESS || '0xD1207e60058C6eF8d56E81B61947EE8e9b6264d9';
     try {
       return ethers.getAddress(raw.toLowerCase());
     } catch {
@@ -151,5 +151,19 @@ export class BlockchainService {
    */
   public static getEtherscanUrl(txHash: string): string {
     return `https://sepolia.etherscan.io/tx/${txHash}`;
+  }
+
+  /**
+   * Get Deployed Contract Address
+   */
+  public static getContractAddress(): string {
+    return this.CONTRACT_ADDRESS;
+  }
+
+  /**
+   * Get Contract Etherscan Explorer URL
+   */
+  public static getContractEtherscanUrl(): string {
+    return `https://sepolia.etherscan.io/address/${this.CONTRACT_ADDRESS}`;
   }
 }

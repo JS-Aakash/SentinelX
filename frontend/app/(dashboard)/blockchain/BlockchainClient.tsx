@@ -76,16 +76,24 @@ export default function BlockchainClient() {
             <h1 className="text-xl font-bold tracking-wider text-white uppercase">
               ETHEREUM SEPOLIA BLOCKCHAIN EXPLORER
             </h1>
-            <span className="rounded-full bg-[#8B5CF6]/10 border border-[#8B5CF6]/30 text-[#8B5CF6] text-[10px] px-2.5 py-0.5 font-bold uppercase">
-              Public Proof Bus
+            <span className="rounded-full bg-[#10B981]/10 border border-[#10B981]/30 text-[#10B981] text-[10px] px-2.5 py-0.5 font-bold uppercase">
+              Contract Deployed & Verified
             </span>
           </div>
           <p className="mt-1 text-xs text-[#94A3B8]">
-            Tamper-Proof Audit Trail · Public Etherscan Verification · IPFS Decoupled Storage
+            Immutable Audit Trail · Live Smart Contract <code className="text-[#00F2FE] bg-[#00F2FE]/10 px-1 py-0.5 rounded">0xD1207e60058C6eF8d56E81B61947EE8e9b6264d9</code> · IPFS Storage
           </p>
         </div>
 
         <div className="flex items-center gap-3">
+          <a
+            href="https://sepolia.etherscan.io/address/0xD1207e60058C6eF8d56E81B61947EE8e9b6264d9"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[#8B5CF6]/20 text-[#A78BFA] border border-[#8B5CF6]/40 hover:bg-[#8B5CF6]/30 transition-all"
+          >
+            <ExternalLink size={14} /> VIEW CONTRACT ON ETHERSCAN
+          </a>
           <div className="relative">
             <Search size={14} className="absolute left-3 top-2.5 text-[#64748B]" />
             <input
@@ -118,8 +126,16 @@ export default function BlockchainClient() {
             <Lock size={16} className="text-[#00F2FE]" />
           </div>
           <div className="mt-2">
-            <span className="text-xs font-mono text-[#00F2FE] truncate block">0x7120B5...Ea72513</span>
-            <p className="text-[10px] text-[#94A3B8] mt-0.5">SentinelXMaintenance.sol</p>
+            <a
+              href="https://sepolia.etherscan.io/address/0xD1207e60058C6eF8d56E81B61947EE8e9b6264d9"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-mono text-[#00F2FE] hover:underline truncate block"
+              title="0xD1207e60058C6eF8d56E81B61947EE8e9b6264d9"
+            >
+              0xD1207e...b6264d9
+            </a>
+            <p className="text-[10px] text-[#10B981] mt-0.5">SentinelXMaintenance.sol (Live)</p>
           </div>
         </div>
 
