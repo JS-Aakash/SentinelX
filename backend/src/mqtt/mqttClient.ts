@@ -13,9 +13,11 @@ export function initMQTTClient(): MqttClient {
   client = mqtt.connect(env.MQTT_URL, {
     clientId: `${env.MQTT_CLIENT_ID}_${Math.random().toString(16).substring(2, 8)}`,
     clean: true,
-    reconnectPeriod: 5000, // Auto-reconnect every 5 seconds on disconnect
+    reconnectPeriod: 5000,
     connectTimeout: 10000,
     rejectUnauthorized: false,
+    ...(env.MQTT_USERNAME ? { username: env.MQTT_USERNAME } : {}),
+    ...(env.MQTT_PASSWORD ? { password: env.MQTT_PASSWORD } : {}),
   });
 
   client.on('connect', () => {

@@ -35,6 +35,11 @@ const envSchema = z.object({
   // MQTT Broker Config
   MQTT_URL: z.string().default('mqtt://localhost:1883'),
   MQTT_CLIENT_ID: z.string().default('sentinelx_backend_ingestion'),
+  MQTT_USERNAME: z.string().optional(),
+  MQTT_PASSWORD: z.string().optional(),
+
+  // Python AI Microservice
+  PYTHON_AI_SERVICE_URL: z.string().default('http://localhost:8000'),
 
   // TimescaleDB / PostgreSQL Config
   TIMESCALE_HOST: z.string().default('localhost'),
