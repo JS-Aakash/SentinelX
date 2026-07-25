@@ -100,7 +100,7 @@ export class BlockchainService {
         ipfsCid,
         Math.min(100, Math.max(0, Math.round(healthScoreBefore))),
         Math.min(100, Math.max(0, Math.round(healthScoreAfter))),
-        { gasLimit: 300000 }
+        { gasLimit: 600000 }
       );
 
       logger.info(`⏳ Sepolia Tx Sent: ${tx.hash}. Waiting for block confirmation...`);
