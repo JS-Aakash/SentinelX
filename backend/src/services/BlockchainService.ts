@@ -28,7 +28,7 @@ export class BlockchainService {
 
   private static SEPOLIA_PRIVATE_KEY = process.env.SEPOLIA_PRIVATE_KEY || '0x4c0883a69102937d6231471b5dbb6204f29ed2c66d21469e38d7a1262d174620';
   private static get CONTRACT_ADDRESS(): string {
-    const raw = process.env.SEPOLIA_CONTRACT_ADDRESS || '0xD1207e60058C6eF8d56E81B61947EE8e9b6264d9';
+    const raw = process.env.SEPOLIA_CONTRACT_ADDRESS || '0x547007CE756b60A1547dC3D4f827BF9BB9fdeA76';
     try {
       return ethers.getAddress(raw.toLowerCase());
     } catch {
