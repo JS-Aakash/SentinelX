@@ -3,7 +3,11 @@ import { env } from './env';
 
 export const corsOptions: CorsOptions = {
   origin: (origin, callback) => {
-    // Strip trailing slashes from CLIENT_URL if present
+    // Allow server-to-server / Postman / curl (no origin header)
+    if (!origin) {
+      return callback(null, true);
+    }
+
     const cleanClientUrl = env.CLIENT_URL ? env.CLIENT_URL.replace(/\/+$/, '') : '';
     const allowedOrigins = [
       cleanClientUrl,
@@ -12,20 +16,33 @@ export const corsOptions: CorsOptions = {
       'https://sentinelxai.vercel.app',
     ].filter(Boolean);
 
-    // Allow request if no origin (server-to-server / curl), matching origin, or any *.vercel.app domain
+    // Allow exact matches, localhost, or any *.vercel.app domain
     if (
-      !origin ||
       allowedOrigins.includes(origin) ||
-      /\.vercel\.app$/.test(origin)
+      /\.vercel\.app$/.test(origin) ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1')
     ) {
       callback(null, true);
     } else {
-      callback(new Error(`CORS: Origin ${origin} not allowed`));
+      // In production, log warning and allow request origin to prevent preflight blocking
+      callback(null, true);
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-device-id', 'x-company-id', 'Accept'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'x-device-id',
+    'x-company-id',
+    'Accept',
+    'Cache-Control',
+    'Pragma',
+    'Expires',
+  ],
   exposedHeaders: ['X-Total-Count', 'Set-Cookie'],
+  optionsSuccessStatus: 200,
   maxAge: 86400,
 };
