@@ -23,7 +23,6 @@ app.use(
   })
 );
 app.use(cors(corsOptions));
-app.options('/(.*)', cors(corsOptions));
 
 // ─── Request Parsing ────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
