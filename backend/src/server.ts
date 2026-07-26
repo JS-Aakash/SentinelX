@@ -77,81 +77,79 @@ initSocketIO(httpServer);
 
 // ─── Database + Server Boot ─────────────────────────────────────────────────
 const startServer = async (): Promise<void> => {
+  const PORT = Number(process.env.PORT) || Number(env.PORT) || 5000;
+
+  // 1. Start HTTP Server immediately on 0.0.0.0 so platform healthchecks pass instantly
+  if (!httpServer.listening) {
+    httpServer.on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        logger.warn(`⚠️ Port ${PORT} is temporarily busy. Automatically releasing port ${PORT}...`);
+        try {
+          const { execSync } = require('child_process');
+          if (process.platform === 'win32') {
+            execSync(`npx kill-port ${PORT}`, { stdio: 'ignore' });
+          } else {
+            execSync(`fuser -k ${PORT}/tcp`, { stdio: 'ignore' });
+          }
+        } catch {}
+        setTimeout(() => {
+          if (!httpServer.listening) {
+            try { httpServer.close(); } catch {}
+            httpServer.listen(PORT, '0.0.0.0');
+          }
+        }, 1000);
+      } else {
+        logger.error('❌ Server error:', err);
+      }
+    });
+
+    httpServer.listen(PORT, '0.0.0.0', () => {
+      logger.info(`🚀 SentinelX Server running on port ${PORT} (0.0.0.0)`);
+      logger.info(`🌍 Environment: ${env.NODE_ENV}`);
+      logger.info(`📡 API Base: http://0.0.0.0:${PORT}/api/v1`);
+      logger.info(`🔌 Socket.IO Server active on port ${PORT}`);
+    });
+  }
+
+  // 2. Connect DBs & Services asynchronously
   try {
-    // 1. Connect MongoDB
     await connectDB();
 
-    // 2. Initialize TimescaleDB / PostgreSQL schemas (non-fatal if unavailable)
     try {
       await initTimescaleDB();
     } catch (tsErr: any) {
       logger.warn(`⚠️ TimescaleDB init failed (non-fatal): ${tsErr.message || tsErr}. Sensor history will be unavailable until reconnected.`);
     }
 
-    // 3. Initialize MQTT Broker Client (non-fatal if unavailable)
     try {
       initMQTTClient();
     } catch (mqttErr: any) {
       logger.warn(`⚠️ MQTT init failed (non-fatal): ${mqttErr.message || mqttErr}. Live ingestion will be unavailable until reconnected.`);
     }
 
-    // 4. Start Device Online/Offline Heartbeat Monitor
     DeviceStatusMonitor.start();
-
-    const PORT = Number(env.PORT) || 5000;
-
-    if (!httpServer.listening) {
-      httpServer.on('error', (err: any) => {
-        if (err.code === 'EADDRINUSE') {
-          logger.warn(`⚠️ Port ${PORT} is temporarily busy. Automatically releasing port ${PORT}...`);
-          try {
-            const { execSync } = require('child_process');
-            if (process.platform === 'win32') {
-              execSync(`npx kill-port ${PORT}`, { stdio: 'ignore' });
-            } else {
-              execSync(`fuser -k ${PORT}/tcp`, { stdio: 'ignore' });
-            }
-          } catch {}
-          setTimeout(() => {
-            if (!httpServer.listening) {
-              try { httpServer.close(); } catch {}
-              httpServer.listen(PORT);
-            }
-          }, 1000);
-        } else {
-          logger.error('❌ Server error:', err);
-        }
-      });
-
-      httpServer.listen(PORT, () => {
-        logger.info(`🚀 SentinelX Server running on port ${PORT}`);
-        logger.info(`🌍 Environment: ${env.NODE_ENV}`);
-        logger.info(`📡 API Base: http://localhost:${PORT}/api/v1`);
-        logger.info(`🔌 Socket.IO Server active on port ${PORT}`);
-      });
-    }
-
-    // Graceful shutdown
-    const shutdown = (signal: string) => {
-      logger.info(`${signal} received. Shutting down gracefully...`);
-      DeviceStatusMonitor.stop();
-      httpServer.close(() => {
-        logger.info('HTTP & Socket.IO server closed');
-        process.exit(0);
-      });
-    };
-
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT', () => shutdown('SIGINT'));
-    process.once('SIGUSR2', () => {
-      DeviceStatusMonitor.stop();
-      httpServer.close(() => {
-        process.kill(process.pid, 'SIGUSR2');
-      });
-    });
   } catch (error) {
-    logger.error('❌ Failed to start server:', error);
+    logger.error('❌ Database connection error during startup:', error);
   }
+
+  // Graceful shutdown
+  const shutdown = (signal: string) => {
+    logger.info(`${signal} received. Shutting down gracefully...`);
+    DeviceStatusMonitor.stop();
+    httpServer.close(() => {
+      logger.info('HTTP & Socket.IO server closed');
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.once('SIGUSR2', () => {
+    DeviceStatusMonitor.stop();
+    httpServer.close(() => {
+      process.kill(process.pid, 'SIGUSR2');
+    });
+  });
 };
 
 startServer();
