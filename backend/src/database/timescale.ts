@@ -4,6 +4,7 @@ import { logger } from '../utils/logger';
 
 export const pgPool = new Pool({
   connectionString: env.TIMESCALE_URI,
+  ssl: { rejectUnauthorized: false },
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
