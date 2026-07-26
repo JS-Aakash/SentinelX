@@ -47,7 +47,12 @@ axiosInstance.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Do not attempt refresh loop for auth routes (login, register, refresh, etc)
+    const isAuthRoute = originalRequest.url?.includes('/auth/login') || 
+                        originalRequest.url?.includes('/auth/register') || 
+                        originalRequest.url?.includes('/auth/refresh');
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthRoute) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
