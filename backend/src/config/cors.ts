@@ -16,16 +16,20 @@ export const corsOptions: CorsOptions = {
       'https://sentinelxai.vercel.app',
     ].filter(Boolean);
 
-    // Allow exact matches, localhost, or any *.vercel.app domain
+    // Regex for local LAN IPs: 10.x.x.x, 192.168.x.x, 172.16-31.x.x
+    const isLocalLanIp = /^http:\/\/(10|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\.\d+\.\d+:\d+$/.test(origin);
+
+    // Allow exact matches, Vercel domains, localhost, or local LAN IP addresses
     if (
       allowedOrigins.includes(origin) ||
       /\.vercel\.app$/.test(origin) ||
       origin.includes('localhost') ||
-      origin.includes('127.0.0.1')
+      origin.includes('127.0.0.1') ||
+      isLocalLanIp
     ) {
       callback(null, true);
     } else {
-      // In production, log warning and allow request origin to prevent preflight blocking
+      // Fallback: reflect incoming origin for maximum resilience
       callback(null, true);
     }
   },
