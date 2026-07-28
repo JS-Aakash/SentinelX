@@ -120,6 +120,16 @@ export default function DashboardClient() {
   const [showProfileDetails, setShowProfileDetails] = useState(false);
   const [selectedMachineId, setSelectedMachineId] = useState<string>('all');
 
+  // Live per-machine telemetry (updated by socket events — vibration, current, sound, etc.)
+  const [liveTelemetry, setLiveTelemetry] = useState<Record<string, {
+    temperature: number | null;
+    vibration: number | null;
+    current: number | null;
+    rpm: number | null;
+    sound: number | null;
+    lastSeen: string | null;
+  }>>({});
+
   // Active AI Anomaly & Threat Notifications stream for user-centric alerts
   const [liveAlerts, setLiveAlerts] = useState<Array<{
     id: string;
@@ -160,6 +170,28 @@ export default function DashboardClient() {
   // Real-time socket updates for fleet items & user alerts
   useEffect(() => {
     const unsubscribeSensor = subscribe<any>('sensor:update', (payload) => {
+      // Store live telemetry under ALL possible lookup keys in ONE atomic setState call
+      // so React batching never causes one key to overwrite the other.
+      const entry = {
+        temperature: payload.temperature ?? null,
+        vibration:   payload.vibration   ?? null,
+        current:     payload.current     ?? null,
+        rpm:         payload.rpm         ?? null,
+        sound:       payload.sound       ?? null,
+        lastSeen:    payload.timestamp   ?? new Date().toISOString(),
+      };
+      setLiveTelemetry((prev) => {
+        const next = { ...prev };
+        // Key by machineId (MongoDB ObjectId string)
+        if (payload.machineId) next[payload.machineId] = entry;
+        // Key by deviceId — both as-is and normalized lowercase for fuzzy matching
+        if (payload.deviceId) {
+          next[`dev:${payload.deviceId}`] = entry;
+          next[`dev:${payload.deviceId.toLowerCase()}`] = entry;
+        }
+        return next;
+      });
+
       setData((prev) => {
         if (!prev) return prev;
         const updatedFleet = prev.machineFleet.map((m) => {
@@ -296,7 +328,7 @@ export default function DashboardClient() {
                     stroke="#00E676"
                     strokeWidth="8"
                     strokeDasharray={2 * Math.PI * 40}
-                    strokeDashoffset={2 * Math.PI * 40 * (1 - (data?.averageHealthIndex ?? 78.5) / 100)}
+                    strokeDashoffset={2 * Math.PI * 40 * (1 - (data?.averageHealthIndex ?? 0) / 100)}
                     strokeLinecap="round"
                     fill="transparent"
                     className="transition-all duration-1000 ease-out"
@@ -304,7 +336,7 @@ export default function DashboardClient() {
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                   <span className="text-lg font-black text-white tabular-nums">
-                    {data?.averageHealthIndex != null ? `${data.averageHealthIndex}%` : '78.5%'}
+                    {data?.averageHealthIndex != null ? `${data.averageHealthIndex}%` : '0%'}
                   </span>
                   <span className="text-[7px] text-[#64748B] uppercase font-bold">AVG HEALTH</span>
                 </div>
@@ -432,124 +464,150 @@ export default function DashboardClient() {
             </div>
           </div>
 
-          {/* 4 Interactive Live Signal Waveform Stream Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
-            {/* Channel 1: Temperature Stream */}
-            <div className="p-3.5 rounded-2xl border border-[#1C2034] bg-[#0E101B] hover:border-[#28314E] transition-all space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#FFB300] shadow-[0_0_8px_#FFB300]" />
-                  <span className="text-xs font-bold text-white">CH-01 · TEMPERATURE</span>
-                </div>
-                <span className="text-[9px] text-[#FFB300] bg-[#FFB300]/10 px-2 py-0.5 rounded border border-[#FFB300]/30 font-bold">
-                  DHT22
-                </span>
-              </div>
-              <div className="flex items-baseline justify-between pt-1">
-                <span className="text-xl font-bold text-white tabular-nums">
-                  {selectedMachineId !== 'all' && data?.machineFleet.find(m => m._id === selectedMachineId)?.latestTemperature != null
-                    ? `${data.machineFleet.find(m => m._id === selectedMachineId)?.latestTemperature} °C`
-                    : '42.5 °C'}
-                </span>
-                <span className="text-[10px] text-[#34D399] font-bold">OPTIMAL (0% Stress)</span>
-              </div>
-              {/* CSS Animated Wave Visualizer */}
-              <div className="h-6 w-full flex items-end gap-1 pt-1 opacity-80">
-                {[40, 55, 45, 60, 50, 75, 65, 50, 80, 55, 45, 60, 50, 70, 45, 60, 55, 75, 50, 65].map((h, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 bg-[#FFB300] rounded-t-sm transition-all duration-300"
-                    style={{ height: `${h}%` }}
-                  />
-                ))}
-              </div>
-            </div>
+          {/* 4 Interactive Live Signal Waveform Stream Cards — real data only */}
+          {(() => {
+            const fleetMachines = data?.machineFleet ?? [];
 
-            {/* Channel 2: Dynamic Vibration */}
-            <div className="p-3.5 rounded-2xl border border-[#1C2034] bg-[#0E101B] hover:border-[#28314E] transition-all space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#00F2FE] shadow-[0_0_8px_#00F2FE]" />
-                  <span className="text-xs font-bold text-white">CH-02 · VIBRATION</span>
-                </div>
-                <span className="text-[9px] text-[#00F2FE] bg-[#00F2FE]/10 px-2 py-0.5 rounded border border-[#00F2FE]/30 font-bold">
-                  ADXL345
-                </span>
-              </div>
-              <div className="flex items-baseline justify-between pt-1">
-                <span className="text-xl font-bold text-white tabular-nums">0.02 g</span>
-                <span className="text-[10px] text-[#34D399] font-bold">STATIC IDLE</span>
-              </div>
-              {/* CSS Animated Wave Visualizer */}
-              <div className="h-6 w-full flex items-end gap-1 pt-1 opacity-80">
-                {[15, 20, 18, 25, 15, 30, 22, 18, 25, 20, 15, 22, 18, 25, 15, 20, 18, 25, 20, 15].map((h, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 bg-[#00F2FE] rounded-t-sm transition-all duration-300"
-                    style={{ height: `${h}%` }}
-                  />
-                ))}
-              </div>
-            </div>
+            // Resolve live telemetry for a fleet machine — tries machineId then deviceId key variants
+            const getLive = (m: typeof fleetMachines[0] | undefined) => {
+              if (!m) return null;
+              // Try machineId key (set when socket payload has machineId)
+              if (liveTelemetry[m._id]) return liveTelemetry[m._id];
+              // Try deviceId key variants (lowercase normalized)
+              if (m.deviceId) {
+                const devKey = `dev:${m.deviceId.toLowerCase()}`;
+                if (liveTelemetry[devKey]) return liveTelemetry[devKey];
+              }
+              return null;
+            };
 
-            {/* Channel 3: Current Waveform */}
-            <div className="p-3.5 rounded-2xl border border-[#1C2034] bg-[#0E101B] hover:border-[#28314E] transition-all space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6] shadow-[0_0_8px_#3B82F6]" />
-                  <span className="text-xs font-bold text-white">CH-03 · CURRENT</span>
-                </div>
-                <span className="text-[9px] text-[#3B82F6] bg-[#3B82F6]/10 px-2 py-0.5 rounded border border-[#3B82F6]/30 font-bold">
-                  ACS712
-                </span>
-              </div>
-              <div className="flex items-baseline justify-between pt-1">
-                <span className="text-xl font-bold text-white tabular-nums">1.18 A</span>
-                <span className="text-[10px] text-[#34D399] font-bold">KALMAN FILTERED</span>
-              </div>
-              {/* CSS Animated Wave Visualizer */}
-              <div className="h-6 w-full flex items-end gap-1 pt-1 opacity-80">
-                {[50, 65, 55, 70, 60, 85, 75, 60, 90, 65, 55, 70, 60, 80, 55, 70, 65, 85, 60, 75].map((h, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 bg-[#3B82F6] rounded-t-sm transition-all duration-300"
-                    style={{ height: `${h}%` }}
-                  />
-                ))}
-              </div>
-            </div>
+            // Fleet averages — any machine that has received ANY live socket data this session
+            const allTemps = fleetMachines.map(m => getLive(m)?.temperature).filter((v): v is number => v != null);
+            const allRPMs  = fleetMachines.map(m => getLive(m)?.rpm).filter((v): v is number => v != null);
+            const allVibs  = fleetMachines.map(m => getLive(m)?.vibration).filter((v): v is number => v != null);
+            const allAmps  = fleetMachines.map(m => getLive(m)?.current).filter((v): v is number => v != null);
 
-            {/* Channel 4: Sound & RPM */}
-            <div className="p-3.5 rounded-2xl border border-[#1C2034] bg-[#0E101B] hover:border-[#28314E] transition-all space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#00E676] shadow-[0_0_8px_#00E676]" />
-                  <span className="text-xs font-bold text-white">CH-04 · SPEED & ACOUSTICS</span>
+            const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+
+            // Single-machine mode
+            const selMachine   = fleetMachines.find(m => m._id === selectedMachineId);
+            const liveSelected = getLive(selMachine);
+
+            // Show values only from live socket data — no stale API fallback
+            const displayTemp    = selectedMachineId !== 'all' ? (liveSelected?.temperature ?? null)  : avg(allTemps);
+            const displayVib     = selectedMachineId !== 'all' ? (liveSelected?.vibration   ?? null)  : avg(allVibs);
+            const displayCurrent = selectedMachineId !== 'all' ? (liveSelected?.current     ?? null)  : avg(allAmps);
+            const displayRPM     = selectedMachineId !== 'all' ? (liveSelected?.rpm         ?? null)  : avg(allRPMs);
+
+
+            const hasAnyData = displayTemp !== null || displayVib !== null || displayCurrent !== null || displayRPM !== null;
+
+            /** Generate 20 wave bars. null → flat grey offline bars; value → bars proportional to value */
+            const makeWave = (value: number | null, max: number, color: string) =>
+              Array.from({ length: 20 }, (_, i) => {
+                if (value === null) return <div key={i} className="flex-1 bg-[#1E2438] rounded-t-sm" style={{ height: '8%' }} />;
+                const pct = Math.min(100, Math.max(5, (value / max) * 100));
+                const h = Math.min(95, Math.max(5, pct + Math.sin(i * 1.4 + value * 0.07) * 15));
+                return <div key={i} className="flex-1 rounded-t-sm transition-all duration-700" style={{ height: `${h}%`, backgroundColor: color }} />;
+              });
+
+            const OfflinePill = () => (
+              <span className="text-[9px] text-[#475569] bg-[#131622] px-2 py-0.5 rounded border border-[#262E48] font-bold uppercase">NO DATA</span>
+            );
+
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
+                {/* CH-01 Temperature */}
+                <div className={cn('p-3.5 rounded-2xl border transition-all space-y-2', displayTemp !== null ? 'border-[#1C2034] bg-[#0E101B] hover:border-[#28314E]' : 'border-[#1C2034]/40 bg-[#0A0B10] opacity-55')}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={cn('w-2.5 h-2.5 rounded-full', displayTemp !== null ? 'bg-[#FFB300] shadow-[0_0_8px_#FFB300]' : 'bg-[#2E354F]')} />
+                      <span className="text-xs font-bold text-white">CH-01 · TEMPERATURE</span>
+                    </div>
+                    {displayTemp !== null
+                      ? <span className="text-[9px] text-[#FFB300] bg-[#FFB300]/10 px-2 py-0.5 rounded border border-[#FFB300]/30 font-bold">DHT22</span>
+                      : <OfflinePill />}
+                  </div>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-xl font-bold text-white tabular-nums">{displayTemp !== null ? `${displayTemp.toFixed(1)} °C` : '— °C'}</span>
+                    {displayTemp !== null && (
+                      <span className={cn('text-[10px] font-bold', displayTemp > 75 ? 'text-rose-400' : 'text-[#34D399]')}>
+                        {displayTemp > 75 ? 'HIGH STRESS' : 'OPTIMAL'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="h-6 w-full flex items-end gap-1 pt-1 opacity-80">{makeWave(displayTemp, 120, '#FFB300')}</div>
                 </div>
-                <span className="text-[9px] text-[#00E676] bg-[#00E676]/10 px-2 py-0.5 rounded border border-[#00E676]/30 font-bold">
-                  TACHOMETER
-                </span>
+
+                {/* CH-02 Vibration */}
+                <div className={cn('p-3.5 rounded-2xl border transition-all space-y-2', displayVib !== null ? 'border-[#1C2034] bg-[#0E101B] hover:border-[#28314E]' : 'border-[#1C2034]/40 bg-[#0A0B10] opacity-55')}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={cn('w-2.5 h-2.5 rounded-full', displayVib !== null ? 'bg-[#00F2FE] shadow-[0_0_8px_#00F2FE]' : 'bg-[#2E354F]')} />
+                      <span className="text-xs font-bold text-white">CH-02 · VIBRATION</span>
+                    </div>
+                    {displayVib !== null
+                      ? <span className="text-[9px] text-[#00F2FE] bg-[#00F2FE]/10 px-2 py-0.5 rounded border border-[#00F2FE]/30 font-bold">ADXL345</span>
+                      : <OfflinePill />}
+                  </div>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-xl font-bold text-white tabular-nums">{displayVib !== null ? `${displayVib.toFixed(3)} g` : '— g'}</span>
+                    {displayVib !== null && (
+                      <span className={cn('text-[10px] font-bold', displayVib > 1.0 ? 'text-rose-400' : 'text-[#34D399]')}>
+                        {displayVib > 1.0 ? 'HIGH VIBE' : 'STATIC IDLE'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="h-6 w-full flex items-end gap-1 pt-1 opacity-80">{makeWave(displayVib, 5, '#00F2FE')}</div>
+                </div>
+
+                {/* CH-03 Current */}
+                <div className={cn('p-3.5 rounded-2xl border transition-all space-y-2', displayCurrent !== null ? 'border-[#1C2034] bg-[#0E101B] hover:border-[#28314E]' : 'border-[#1C2034]/40 bg-[#0A0B10] opacity-55')}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={cn('w-2.5 h-2.5 rounded-full', displayCurrent !== null ? 'bg-[#3B82F6] shadow-[0_0_8px_#3B82F6]' : 'bg-[#2E354F]')} />
+                      <span className="text-xs font-bold text-white">CH-03 · CURRENT</span>
+                    </div>
+                    {displayCurrent !== null
+                      ? <span className="text-[9px] text-[#3B82F6] bg-[#3B82F6]/10 px-2 py-0.5 rounded border border-[#3B82F6]/30 font-bold">ACS712</span>
+                      : <OfflinePill />}
+                  </div>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-xl font-bold text-white tabular-nums">{displayCurrent !== null ? `${displayCurrent.toFixed(2)} A` : '— A'}</span>
+                    {displayCurrent !== null && <span className="text-[10px] text-[#34D399] font-bold">KALMAN FILTERED</span>}
+                  </div>
+                  <div className="h-6 w-full flex items-end gap-1 pt-1 opacity-80">{makeWave(displayCurrent, 20, '#3B82F6')}</div>
+                </div>
+
+                {/* CH-04 Speed & Acoustics */}
+                <div className={cn('p-3.5 rounded-2xl border transition-all space-y-2', displayRPM !== null ? 'border-[#1C2034] bg-[#0E101B] hover:border-[#28314E]' : 'border-[#1C2034]/40 bg-[#0A0B10] opacity-55')}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={cn('w-2.5 h-2.5 rounded-full', displayRPM !== null ? 'bg-[#00E676] shadow-[0_0_8px_#00E676]' : 'bg-[#2E354F]')} />
+                      <span className="text-xs font-bold text-white">CH-04 · SPEED &amp; ACOUSTICS</span>
+                    </div>
+                    {displayRPM !== null
+                      ? <span className="text-[9px] text-[#00E676] bg-[#00E676]/10 px-2 py-0.5 rounded border border-[#00E676]/30 font-bold">TACHOMETER</span>
+                      : <OfflinePill />}
+                  </div>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-xl font-bold text-white tabular-nums">{displayRPM !== null ? `${Math.round(displayRPM).toLocaleString()} RPM` : '— RPM'}</span>
+                    {displayRPM !== null && <span className="text-[10px] text-[#38BDF8] font-bold">NOMINAL</span>}
+                  </div>
+                  <div className="h-6 w-full flex items-end gap-1 pt-1 opacity-80">{makeWave(displayRPM, 3000, '#00E676')}</div>
+                </div>
+
+                {/* Offline notice: no fleet has sent any telemetry */}
+                {!hasAnyData && !loading && fleetMachines.length > 0 && (
+                  <div className="col-span-2 flex items-center justify-center gap-3 py-4 rounded-2xl border border-[#1C2034]/50 bg-[#0A0B10]/80 text-[#475569] text-xs font-mono">
+                    <WifiOff size={15} />
+                    <span>NO TELEMETRY RECEIVED — start the simulator or connect your ESP32 to see live data</span>
+                  </div>
+                )}
               </div>
-              <div className="flex items-baseline justify-between pt-1">
-                <span className="text-xl font-bold text-white tabular-nums">
-                  {selectedMachineId !== 'all' && data?.machineFleet.find(m => m._id === selectedMachineId)?.latestRPM != null
-                    ? `${data.machineFleet.find(m => m._id === selectedMachineId)?.latestRPM} RPM`
-                    : '1,480 RPM'}
-                </span>
-                <span className="text-[10px] text-[#38BDF8] font-bold">NOMINAL</span>
-              </div>
-              {/* CSS Animated Wave Visualizer */}
-              <div className="h-6 w-full flex items-end gap-1 pt-1 opacity-80">
-                {[60, 70, 65, 75, 60, 80, 70, 65, 85, 70, 60, 75, 65, 80, 60, 70, 65, 80, 70, 75].map((h, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 bg-[#00E676] rounded-t-sm transition-all duration-300"
-                    style={{ height: `${h}%` }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
+            );
+          })()}
+
 
           <div className="flex items-center justify-between text-[10px] text-[#64748B] border-t border-[#181B28] pt-3 relative z-10">
             <span>Sampling Rate: 1,000 ms · High Precision Telemetry Processing</span>

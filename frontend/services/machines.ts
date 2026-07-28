@@ -85,6 +85,10 @@ export const machinesApi = {
   trainFromLiveDataset: (id: string, datasetIds?: string[]) =>
     api.post<ApiResponse<{ machine: Machine; aiModel: any }>>(`/machines/${id}/train-live`, { datasetIds }),
 
+  // Save current partial live recording progress as a bundled Dataset (resets counter to 0)
+  saveProgressAsDataset: (id: string) =>
+    api.post<ApiResponse<{ machine: Machine; dataset: any }>>(`/machines/${id}/dataset/save-progress`),
+
   // ─── Digital Twin 3D Model APIs ─────────────────────────────────────────────
   uploadDigitalTwin: (id: string, file: File) => {
     const formData = new FormData();

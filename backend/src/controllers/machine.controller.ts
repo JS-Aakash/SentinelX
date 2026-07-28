@@ -144,6 +144,75 @@ export const updateAILifecycleStatus = asyncHandler(async (req: Request, res: Re
 
 // ─── Clear Recorded Live Dataset ─────────────────────────────────────────────
 
+// ─── Save Current Live Recording Progress as Bundled Dataset ─────────────────
+// Converts the current partial recording (e.g. 5000/10000 samples) into a
+// persisted Dataset document (cleaned + feature engineered), then resets the
+// live recording counter to 0 so collection restarts fresh.
+
+export const saveProgressAsDataset = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params as Record<string, string>;
+  const { Machine, AILifecycleStatus } = await import('../models/Machine');
+  const { DatasetService } = await import('../services/DatasetService');
+  const fs = await import('fs');
+
+  const machine = await Machine.findOne({ _id: id, companyId: req.user!.companyId }).exec();
+  if (!machine) {
+    throw ApiError.notFound('Machine not found');
+  }
+
+  const filePath = DatasetService.getLiveDatasetFilePath(machine._id.toString());
+  if (!fs.existsSync(filePath)) {
+    throw ApiError.badRequest('No live recorded data exists yet. Turn on data collection first.');
+  }
+
+  // Check there are enough rows
+  const rawRows = await DatasetService.parseUploadedFile(filePath);
+  if (!rawRows || rawRows.length < 5) {
+    throw ApiError.badRequest(`Not enough data to save: only ${rawRows?.length ?? 0} samples recorded. Minimum 5 required.`);
+  }
+
+  // 1. Register the current live CSV as a proper Dataset document
+  const dataset = await DatasetService.registerDatasetFromLiveRecording(
+    machine._id.toString(),
+    req.user!.userId
+  );
+
+  // 2. Reset the live recording counter + clear the live CSV file so collection restarts at 0
+  DatasetService.clearLiveDatasetFile(machine._id.toString());
+
+  machine.liveDataCollection = {
+    collectedSampleCount: 0,
+    collectionStartDate: machine.isRecording ? new Date() : machine.liveDataCollection?.collectionStartDate,
+    lastReadingTimestamp: machine.liveDataCollection?.lastReadingTimestamp,
+    recommendedSamplesThreshold: machine.liveDataCollection?.recommendedSamplesThreshold || 10000,
+    newSamplesSinceLastTraining: 0,
+  };
+
+  // If machine was already at ready_for_training or ai_ready, keep it, otherwise set collecting_data
+  if (
+    machine.aiLifecycleStatus !== AILifecycleStatus.AI_READY &&
+    machine.aiLifecycleStatus !== AILifecycleStatus.READY_FOR_TRAINING
+  ) {
+    machine.aiLifecycleStatus = machine.isRecording
+      ? AILifecycleStatus.COLLECTING_DATA
+      : AILifecycleStatus.REGISTERED;
+  }
+
+  await machine.save();
+
+  sendSuccess(res, `Dataset v${dataset.version} saved successfully (${rawRows.length} samples). Collection counter reset to 0.`, {
+    machine,
+    dataset: {
+      _id: dataset._id,
+      version: dataset.version,
+      datasetName: dataset.datasetName,
+      rowCount: dataset.rowCount,
+      status: dataset.status,
+      engineeredFilePath: !!dataset.engineeredFilePath,
+    },
+  });
+});
+
 export const clearMachineLiveDataset = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params as Record<string, string>;
   const { Machine, AILifecycleStatus } = await import('../models/Machine');

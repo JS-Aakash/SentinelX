@@ -119,10 +119,8 @@ export class DashboardService {
       } catch {}
     }
 
-    // Default fallbacks if no records exist yet
-    if (averageTemperature === null) averageTemperature = 42.5;
-    if (averageVibration === null) averageVibration = 0.14;
-    if (todaySensorRecords === 0) todaySensorRecords = 1250;
+    // Keep averageTemperature / averageVibration as null if no real data — UI will show "—" or offline state
+    // todaySensorRecords stays 0 if no real records today
 
     // 4. Machine fleet with latest device / sensor data
     const allMachines = await Machine.find({ companyId })
@@ -155,8 +153,7 @@ export class DashboardService {
           }
         }
 
-        if (!latestTemperature) latestTemperature = 43.2;
-        if (!latestRPM) latestRPM = 1480;
+        // Pull lastSeen from device record as fallback
         if (!lastSeen && device?.lastSeen) {
           lastSeen = new Date(device.lastSeen).toISOString();
         }
@@ -168,12 +165,14 @@ export class DashboardService {
           type: m.type,
           status: m.status,
           image: m.image || undefined,
-          deviceId: device?.deviceId || 'DEV-001',
-          deviceName: device?.name || 'IoT Gateway',
-          deviceStatus: device?.status || 'online',
+          // Only set these if a real device is linked — no fake fallbacks
+          deviceId: device?.deviceId || null,
+          deviceName: device?.name || null,
+          deviceStatus: device?.status || null,
+          // null means "no real data received yet" — UI will show offline/no-data state
           latestTemperature,
           latestRPM,
-          lastSeen: lastSeen || new Date().toISOString(),
+          lastSeen,
         };
       })
     );

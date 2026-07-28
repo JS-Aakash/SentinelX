@@ -89,30 +89,39 @@ export class InferenceService {
     const ratedRPM = limits.ratedRPM || 1500;
     const maxSound = limits.maxSound || 85;
 
-    // Health deductions based on excess above rated operational baselines
+    // 1. Temperature: Values at or below rated baseline are 100% healthy (0 deduction)
     const ratedTemp = limits.ratedTemperature || 45;
     const tempExcess = Math.max(0, reading.temperature - ratedTemp);
     const tempNorm = tempExcess / Math.max(1, maxTemp - ratedTemp);
     const tempScore = Math.max(0, 100 - tempNorm * 100);
 
+    // 2. Vibration: Values at or below rated baseline are 100% healthy (0 deduction)
     const ratedVib = limits.ratedVibration || 0.15;
     const vibExcess = Math.max(0, reading.vibration - ratedVib);
     const vibNorm = vibExcess / Math.max(0.1, maxVib - ratedVib);
     const vibScore = Math.max(0, 100 - vibNorm * 100);
 
+    // 3. Current: Values at or below rated baseline are 100% healthy (0 deduction)
     const ratedCur = limits.ratedCurrent || 3.0;
     const curExcess = Math.max(0, reading.current - ratedCur);
     const curNorm = curExcess / Math.max(1, maxCur - ratedCur);
     const curScore = Math.max(0, 100 - curNorm * 100);
 
-    const voltDev = Math.abs(reading.voltage - 230) / 230;
-    const voltScore = Math.max(0, 100 - voltDev * 200);
+    // 4. Voltage: Within ±8% of nominal 230V is 100% healthy
+    const voltDev = Math.max(0, Math.abs(reading.voltage - 230) - 18.4) / 230;
+    const voltScore = Math.max(0, 100 - voltDev * 250);
 
+    // 5. RPM: If machine is idle/off (low current/RPM), do not penalize as failure
     const minRPM = limits.minRPM || 1000;
-    const rpmDrop = Math.max(0, ratedRPM - reading.rpm);
-    const rpmNorm = rpmDrop / Math.max(1, ratedRPM - minRPM);
-    const rpmScore = Math.max(0, 100 - rpmNorm * 100);
+    const isRunning = reading.current >= 0.5 || reading.rpm >= 100;
+    let rpmScore = 100;
+    if (isRunning) {
+      const rpmDrop = Math.max(0, ratedRPM - reading.rpm);
+      const rpmNorm = rpmDrop / Math.max(1, ratedRPM - minRPM);
+      rpmScore = Math.max(0, 100 - rpmNorm * 100);
+    }
 
+    // 6. Sound: Values at or below rated baseline are 100% healthy (0 deduction)
     const ratedSound = limits.ratedSound || 60;
     const soundExcess = Math.max(0, reading.sound - ratedSound);
     const soundNorm = soundExcess / Math.max(1, maxSound - ratedSound);
@@ -127,15 +136,33 @@ export class InferenceService {
       soundScore * 0.10
     );
 
+    const isBreached =
+      reading.temperature >= maxTemp ||
+      reading.vibration >= maxVib ||
+      reading.current >= maxCur ||
+      (isRunning && minRPM > 0 && reading.rpm <= minRPM);
+
     const minScore = Math.min(tempScore, vibScore, curScore, voltScore, rpmScore, soundScore);
-    const instantScore = Math.round(weightedAverage * 0.4 + minScore * 0.6);
+
+    // If any sensor breaches operating limit, severely penalize instant score
+    let instantScore = Math.round(weightedAverage * 0.4 + minScore * 0.6);
+    if (isBreached) {
+      const maxExcessRatio = Math.max(
+        reading.temperature / maxTemp,
+        reading.vibration / maxVib,
+        reading.current / maxCur,
+        isRunning && minRPM > 0 ? (minRPM / Math.max(1, reading.rpm)) : 1.0
+      );
+      instantScore = Math.max(0, Math.round(35 / Math.max(1, maxExcessRatio)));
+    }
     const instantClamped = Math.max(0, Math.min(100, instantScore));
 
-    // EWMA Smoothing (15% instant reading, 85% historical baseline trend)
+    // EWMA Historical Trend Anchoring (92% historical weight for smooth daily stability; 90% instant on breach)
     let scoreClamped = instantClamped;
     if (machineId) {
       const prevSmoothed = HEALTH_SCORE_CACHE.get(machineId) ?? instantClamped;
-      scoreClamped = Math.round(0.15 * instantClamped + 0.85 * prevSmoothed);
+      const alpha = isBreached || instantClamped < 40 ? 0.90 : 0.08;
+      scoreClamped = Math.round(alpha * instantClamped + (1 - alpha) * prevSmoothed);
       HEALTH_SCORE_CACHE.set(machineId, scoreClamped);
     }
 
@@ -364,18 +391,41 @@ export class InferenceService {
       const maxTemp = limits.maxTemperature || 80;
       const maxVib = limits.maxVibration || 2.5;
       const maxCur = limits.maxCurrent || 15;
+      const minRPM = limits.minRPM || 1000;
       const ratedRPM = machine?.ratedRPM || 1500;
 
-      const tempDist = Math.max(0, (maxTemp - temperature) / Math.max(1, maxTemp - 30));
-      const vibDist = Math.max(0, (maxVib - vibration) / Math.max(0.1, maxVib));
-      const curDist = Math.max(0, (maxCur - current) / Math.max(1, maxCur));
-      const voltDev = Math.abs(voltage - 230) / 230;
-      const voltDist = Math.max(0, 1 - voltDev);
-      const soundDist = Math.max(0, (85 - sound) / 30);
-      const rpmDist = Math.max(0, rpm / ratedRPM);
+      let breachingSensor: string | null = null;
+      let breachingVal: number | null = null;
 
-      const compositeDist = tempDist * 0.20 + vibDist * 0.20 + curDist * 0.20 + voltDist * 0.10 + rpmDist * 0.15 + soundDist * 0.15;
-      const finalRemainingHours = Math.floor(Math.max(48, Math.min(25000, compositeDist * 18000)));
+      if (temperature >= maxTemp) {
+        breachingSensor = 'Temperature';
+        breachingVal = temperature;
+      } else if (vibration >= maxVib) {
+        breachingSensor = 'Vibration';
+        breachingVal = vibration;
+      } else if (current >= maxCur) {
+        breachingSensor = 'Current';
+        breachingVal = current;
+      } else if (minRPM > 0 && rpm <= minRPM) {
+        breachingSensor = 'RPM';
+        breachingVal = rpm;
+      }
+
+      let finalRemainingHours = 0;
+      if (breachingSensor) {
+        finalRemainingHours = 0;
+      } else {
+        const tempDist = Math.max(0, (maxTemp - temperature) / Math.max(1, maxTemp - 30));
+        const vibDist = Math.max(0, (maxVib - vibration) / Math.max(0.1, maxVib));
+        const curDist = Math.max(0, (maxCur - current) / Math.max(1, maxCur));
+        const voltDev = Math.abs(voltage - 230) / 230;
+        const voltDist = Math.max(0, 1 - voltDev);
+        const soundDist = Math.max(0, (85 - sound) / 30);
+        const rpmDist = Math.max(0, rpm / ratedRPM);
+
+        const compositeDist = tempDist * 0.25 + vibDist * 0.25 + curDist * 0.20 + voltDist * 0.15 + rpmDist * 0.15;
+        finalRemainingHours = Math.floor(Math.max(48, Math.min(25000, compositeDist * 18000)));
+      }
 
       const trajectorySteps: Array<{
         step: number;
@@ -408,12 +458,13 @@ export class InferenceService {
         });
       }
 
+      const isBreached = breachingSensor !== null;
       pyResult = {
         predicted_next: predNext,
         forecast_trajectory: trajectorySteps,
-        is_anomaly: temperature > 75 || vibration > 2.0 || current > 12,
-        anomaly_score: temperature > 75 || vibration > 2.0 ? 0.78 : 0.12,
-        affected_sensors: temperature > 75 ? ['Temperature'] : vibration > 2.0 ? ['Vibration'] : [],
+        is_anomaly: isBreached || temperature > 75 || vibration > 2.0 || current > 12,
+        anomaly_score: isBreached ? 0.94 : temperature > 75 || vibration > 2.0 ? 0.78 : 0.12,
+        affected_sensors: breachingSensor ? [breachingSensor] : temperature > 75 ? ['Temperature'] : vibration > 2.0 ? ['Vibration'] : [],
         sensor_deviations: [
           { sensor: 'Temperature', expected: 45, actual: temperature, deviation: Number((temperature - 45).toFixed(1)), unit: '°C' },
           { sensor: 'Vibration', expected: 0.12, actual: vibration, deviation: Number((vibration - 0.12).toFixed(3)), unit: 'g' },
@@ -422,14 +473,14 @@ export class InferenceService {
           { sensor: 'RPM', expected: 1480, actual: rpm, deviation: Number((rpm - 1480).toFixed(0)), unit: 'RPM' },
           { sensor: 'Sound', expected: 62, actual: sound, deviation: Number((sound - 62).toFixed(1)), unit: 'dB' },
         ],
-        primary_cause: temperature > 75 ? 'Abnormal Temperature (+30 °C)' : 'Nominal Baseline',
-        recommended_action: temperature > 75 ? 'Inspect cooling fan airflow and lubrication.' : 'Maintain standard preventive inspection schedule.',
+        primary_cause: breachingSensor ? `Critical ${breachingSensor} Limit Breach (${breachingVal})` : 'Nominal Baseline',
+        recommended_action: breachingSensor ? `EMERGENCY: Inspect ${breachingSensor} system and machine mechanical mounting immediately.` : 'Maintain standard preventive inspection schedule.',
         machine_age_days: machineAgeDays,
         operating_hours: operatingHours,
         remaining_operating_hours: finalRemainingHours,
-        confidence_score: 94,
+        confidence_score: isBreached ? 98 : 94,
         rsot_seconds: finalRemainingHours * 3600,
-        rsot_formatted: `Healthy (${finalRemainingHours.toLocaleString()} operating hours)`,
+        rsot_formatted: isBreached ? `CRITICAL LIMIT BREACH (0 operating hours - Emergency Maintenance Required)` : `Healthy (${finalRemainingHours.toLocaleString()} operating hours)`,
       };
     }
 

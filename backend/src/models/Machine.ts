@@ -91,6 +91,7 @@ export interface IMachine extends Document {
   isRecording: boolean;
   liveDataCollection: ILiveDataCollection;
   digitalTwin: IDigitalTwin;
+  simulationConfig?: ISimulationConfig;
   ratedRPM?: number;
   ratedVoltage?: number;
   ratedCurrent?: number;
@@ -117,6 +118,25 @@ const OperatingLimitsSchema = new Schema<IOperatingLimits>(
     failureTemperature: { type: Number, min: 0 },
     failureVibration: { type: Number, min: 0 },
     failureCurrent: { type: Number, min: 0 },
+  },
+  { _id: false }
+);
+
+export interface ISimulationConfig {
+  isRunning: boolean;
+  isPaused: boolean;
+  profile: string;
+  speed: number;
+  overrides?: Record<string, any>;
+}
+
+const SimulationConfigSchema = new Schema<ISimulationConfig>(
+  {
+    isRunning: { type: Boolean, default: false },
+    isPaused: { type: Boolean, default: false },
+    profile: { type: String, default: 'normal_operation' },
+    speed: { type: Number, default: 1 },
+    overrides: { type: Schema.Types.Mixed, default: {} },
   },
   { _id: false }
 );
@@ -249,6 +269,16 @@ const MachineSchema = new Schema<IMachine>(
         uploadedAt: null,
         uploadedBy: null,
         version: 1,
+      },
+    },
+    simulationConfig: {
+      type: SimulationConfigSchema,
+      default: {
+        isRunning: false,
+        isPaused: false,
+        profile: 'normal_operation',
+        speed: 1,
+        overrides: {},
       },
     },
     ratedRPM: { type: Number, min: 0, default: null },

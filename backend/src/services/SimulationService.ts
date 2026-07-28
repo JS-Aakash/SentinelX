@@ -18,6 +18,7 @@ export interface ISensorOverride {
   voltage?: number;
   rpm?: number;
   sound?: number;
+  [key: string]: number | undefined;
 }
 
 export interface ISimulationSession {
@@ -60,9 +61,27 @@ export class SimulationService {
       throw new Error('Machine not found');
     }
 
-    // Find assigned device or auto-generate simulated device ID
+    // Find assigned device, or create a dedicated simulator device linked to THIS machine.
+    // This is critical: without creating the device here, IngestionService would auto-create
+    // it linked to the first machine it finds (wrong), causing the socket to emit with the
+    // wrong machineId and the dashboard to show data under the wrong machine.
     let device = await Device.findOne({ machineId: machine._id }).exec();
-    let deviceId = device ? device.deviceId : `SIM-${machine.machineCode}`;
+    if (!device) {
+      const { DeviceStatus } = await import('../models/Device');
+      device = await Device.create({
+        name: `Simulator (${machine.machineCode})`,
+        deviceId: `SIM-${machine.machineCode.toUpperCase()}`,
+        type: 'Simulator',
+        status: DeviceStatus.ONLINE,
+        companyId: machine.companyId,
+        machineId: machine._id,
+        createdBy: machine.companyId,
+        firmwareVersion: 'v2.4.1-sim',
+        macAddress: `AA:BB:CC:DD:EE:${Math.floor(Math.random() * 90 + 10)}`,
+      });
+      logger.info(`🔧 Auto-created simulator device '${device.deviceId}' linked to machine '${machine.name}'`);
+    }
+    const deviceId = device.deviceId;
 
     // Stop existing simulation if running
     this.stopSimulation(machineId);
@@ -80,20 +99,29 @@ export class SimulationService {
       overrides,
       currentValues: initialValues,
     };
-
     ACTIVE_SIMULATIONS.set(machineId, session);
+
+    // Persist active simulation config to MongoDB Machine document
+    machine.simulationConfig = {
+      isRunning: true,
+      isPaused: false,
+      profile,
+      speed,
+      overrides,
+    };
+    await machine.save().catch(() => {});
 
     // Start tick loop
     this.scheduleNextTick(machineId);
 
-    logger.info(`🎮 Started simulation for machine '${machine.name}' (${machineId}) [Profile: ${profile}, Speed: ${speed}x]`);
+    logger.info(`🎮 Started simulation for machine '${machine.name}' (${machineId}) [Profile: ${profile}, Speed: ${speed}x, Device: ${deviceId}]`);
     return this.getSanitizedSession(session);
   }
 
   /**
    * Pause running simulation
    */
-  public static pauseSimulation(machineId: string): ISimulationSession | null {
+  public static async pauseSimulation(machineId: string): Promise<ISimulationSession | null> {
     const session = ACTIVE_SIMULATIONS.get(machineId);
     if (!session) return null;
 
@@ -103,6 +131,8 @@ export class SimulationService {
       session.timer = undefined;
     }
 
+    await Machine.findByIdAndUpdate(machineId, { 'simulationConfig.isPaused': true }).catch(() => {});
+
     logger.info(`⏸️ Paused simulation for machine ${machineId}`);
     return this.getSanitizedSession(session);
   }
@@ -110,13 +140,14 @@ export class SimulationService {
   /**
    * Resume paused simulation
    */
-  public static resumeSimulation(machineId: string): ISimulationSession | null {
+  public static async resumeSimulation(machineId: string): Promise<ISimulationSession | null> {
     const session = ACTIVE_SIMULATIONS.get(machineId);
     if (!session) return null;
 
     if (session.isPaused) {
       session.isPaused = false;
       this.scheduleNextTick(machineId);
+      await Machine.findByIdAndUpdate(machineId, { 'simulationConfig.isPaused': false }).catch(() => {});
       logger.info(`▶️ Resumed simulation for machine ${machineId}`);
     }
 
@@ -126,16 +157,46 @@ export class SimulationService {
   /**
    * Stop simulation completely
    */
-  public static stopSimulation(machineId: string): boolean {
+  public static async stopSimulation(machineId: string): Promise<boolean> {
     const session = ACTIVE_SIMULATIONS.get(machineId);
-    if (!session) return false;
-
-    if (session.timer) {
+    if (session?.timer) {
       clearTimeout(session.timer);
     }
     ACTIVE_SIMULATIONS.delete(machineId);
+
+    await Machine.findByIdAndUpdate(machineId, {
+      'simulationConfig.isRunning': false,
+      'simulationConfig.isPaused': false,
+    }).catch(() => {});
+
     logger.info(`⏹️ Stopped simulation for machine ${machineId}`);
     return true;
+  }
+
+  /**
+   * Auto-resume active simulations from MongoDB when backend boots / restarts
+   */
+  public static async restoreSimulations(): Promise<void> {
+    try {
+      const machinesWithActiveSim = await Machine.find({ 'simulationConfig.isRunning': true }).exec();
+      if (machinesWithActiveSim.length === 0) return;
+
+      logger.info(`🔄 Restoring ${machinesWithActiveSim.length} active simulation(s) after backend restart...`);
+      for (const m of machinesWithActiveSim) {
+        const config = m.simulationConfig;
+        if (!config) continue;
+        await this.startSimulation({
+          machineId: m._id.toString(),
+          profile: config.profile as SimulationProfile,
+          speed: config.speed || 1,
+          overrides: config.overrides,
+        }).catch((err) => {
+          logger.warn(`Failed to restore simulation for machine ${m.name}: ${err.message}`);
+        });
+      }
+    } catch (err: any) {
+      logger.warn(`Notice during simulation restoration: ${err.message}`);
+    }
   }
 
   /**

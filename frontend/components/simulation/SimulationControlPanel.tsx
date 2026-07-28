@@ -198,23 +198,25 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
   const updateTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const handleSensorChange = (key: keyof typeof sensors, val: number) => {
-    const next = { ...sensors, [key]: val };
-    setSensors(next);
-    setActiveProfile('custom');
+    setSensors((prevSensors) => {
+      const next = { ...prevSensors, [key]: val };
+      const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setSimHistory((prev) => [
+        ...prev.slice(-19),
+        {
+          time: timeLabel,
+          temperature: Number(next.temperature.toFixed(1)),
+          vibration: Number(next.vibration.toFixed(2)),
+          current: Number(next.current.toFixed(1)),
+          voltage: Number((next.voltage ?? 230).toFixed(1)),
+          rpm: Math.round(next.rpm ?? 1480),
+          sound: Number((next.sound ?? 60).toFixed(1)),
+        },
+      ]);
+      return next;
+    });
 
-    const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setSimHistory((prev) => [
-      ...prev.slice(-19),
-      {
-        time: timeLabel,
-        temperature: Number(next.temperature.toFixed(1)),
-        vibration: Number(next.vibration.toFixed(2)),
-        current: Number(next.current.toFixed(1)),
-        voltage: Number((next.voltage ?? 230).toFixed(1)),
-        rpm: Math.round(next.rpm ?? 1480),
-        sound: Number((next.sound ?? 60).toFixed(1)),
-      },
-    ]);
+    setActiveProfile('custom');
 
     if (!selectedMachineId) return;
 
@@ -223,10 +225,8 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
     }
 
     updateTimerRef.current = setTimeout(() => {
-      simulationApi.updateSensors(selectedMachineId, { [key]: val }).catch(() => {
-        // Silent catch for rapid slider updates
-      });
-    }, 300);
+      simulationApi.updateSensors(selectedMachineId, { [key]: val }).catch(() => {});
+    }, 150);
   };
 
   const profilesConfig: Array<{
@@ -609,18 +609,38 @@ const SensorSliderControl: React.FC<SliderProps> = ({
   onChange,
 }) => {
   const [val, setVal] = useState(value);
-  const [isInteracting, setIsInteracting] = useState(false);
+  const isInteractingRef = React.useRef(false);
+  const lockTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const lockUserInteraction = () => {
+    isInteractingRef.current = true;
+    if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    lockTimerRef.current = setTimeout(() => {
+      isInteractingRef.current = false;
+    }, 2500);
+  };
 
   useEffect(() => {
-    if (!isInteracting) {
+    if (!isInteractingRef.current) {
       setVal(value);
     }
-  }, [value, isInteracting]);
+  }, [value]);
 
   const handleChange = (newVal: number) => {
+    lockUserInteraction();
     const clamped = Math.max(min, Math.min(max, newVal));
     setVal(clamped);
     onChange(clamped);
+  };
+
+  const handleStep = (delta: number) => {
+    lockUserInteraction();
+    setVal((prevVal) => {
+      const nextVal = Number((prevVal + delta).toFixed(2));
+      const clamped = Math.max(min, Math.min(max, nextVal));
+      onChange(clamped);
+      return clamped;
+    });
   };
 
   return (
@@ -633,8 +653,8 @@ const SensorSliderControl: React.FC<SliderProps> = ({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={() => handleChange(Number((val - step).toFixed(2)))}
-            className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center text-sm font-bold transition-all border border-slate-700"
+            onClick={() => handleStep(-step)}
+            className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center text-sm font-bold transition-all border border-slate-700 active:scale-95"
           >
             <Minus size={14} />
           </button>
@@ -644,15 +664,14 @@ const SensorSliderControl: React.FC<SliderProps> = ({
             step={step}
             min={min}
             max={max}
-            onFocus={() => setIsInteracting(true)}
-            onBlur={() => setIsInteracting(false)}
+            onFocus={lockUserInteraction}
             onChange={(e) => handleChange(parseFloat(e.target.value) || min)}
             className="w-20 bg-slate-900 border border-slate-700 text-white font-mono font-bold text-center text-sm rounded-lg py-1 focus:outline-none focus:border-cyan-400 shadow-inner"
           />
           <button
             type="button"
-            onClick={() => handleChange(Number((val + step).toFixed(2)))}
-            className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center text-sm font-bold transition-all border border-slate-700"
+            onClick={() => handleStep(step)}
+            className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center text-sm font-bold transition-all border border-slate-700 active:scale-95"
           >
             <Plus size={14} />
           </button>
@@ -666,10 +685,8 @@ const SensorSliderControl: React.FC<SliderProps> = ({
         max={max}
         step={step}
         value={val}
-        onMouseDown={() => setIsInteracting(true)}
-        onMouseUp={() => setIsInteracting(false)}
-        onTouchStart={() => setIsInteracting(true)}
-        onTouchEnd={() => setIsInteracting(false)}
+        onMouseDown={lockUserInteraction}
+        onTouchStart={lockUserInteraction}
         onChange={(e) => handleChange(parseFloat(e.target.value))}
         className="w-full h-3.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#00F2FE] hover:accent-[#00E676] transition-all"
       />

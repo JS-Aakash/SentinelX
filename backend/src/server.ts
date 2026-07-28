@@ -44,7 +44,30 @@ app.use((req, _res, next) => {
 });
 
 // ─── Serve Uploaded Static Files ───────────────────────────────────────────
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+const uploadsDir = path.join(process.cwd(), 'uploads');
+const digitalTwinsDir = path.join(uploadsDir, 'digital-twins');
+if (!require('fs').existsSync(digitalTwinsDir)) {
+  require('fs').mkdirSync(digitalTwinsDir, { recursive: true });
+}
+
+app.use('/uploads', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.header('Access-Control-Allow-Headers', '*');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+}, express.static(uploadsDir, {
+  maxAge: '1d',
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.glb')) {
+      res.setHeader('Content-Type', 'model/gltf-binary');
+    } else if (filePath.endsWith('.gltf')) {
+      res.setHeader('Content-Type', 'model/gltf+json');
+    }
+  },
+}));
 
 // ─── API Routes ─────────────────────────────────────────────────────────────
 app.use('/api/v1', v1Routes);
@@ -128,6 +151,10 @@ const startServer = async (): Promise<void> => {
     }
 
     DeviceStatusMonitor.start();
+
+    // Auto-restore any active simulation sessions after server startup / restart
+    const { SimulationService } = await import('./services/SimulationService');
+    await SimulationService.restoreSimulations();
   } catch (error) {
     logger.error('❌ Database connection error during startup:', error);
   }

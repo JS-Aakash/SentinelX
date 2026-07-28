@@ -66,12 +66,20 @@ export function DigitalTwinViewerModal({
 
   // Compute Full Model URL
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
-  const BACKEND_ORIGIN = API_BASE.replace('/api/v1', '');
-  const modelUrl = digitalTwin.modelUrl
+  const rawBackend = API_BASE.replace(/\/api\/v1\/?$/, '');
+  const BACKEND_ORIGIN = rawBackend.startsWith('http')
+    ? rawBackend
+    : typeof window !== 'undefined'
+      ? `${window.location.protocol}//${window.location.hostname}:5000`
+      : 'http://localhost:5000';
+
+  const rawUrl = digitalTwin.modelUrl
     ? digitalTwin.modelUrl.startsWith('http')
       ? digitalTwin.modelUrl
-      : `${BACKEND_ORIGIN}${digitalTwin.modelUrl}`
+      : `${BACKEND_ORIGIN}${digitalTwin.modelUrl.startsWith('/') ? '' : '/'}${digitalTwin.modelUrl}`
     : '';
+
+  const modelUrl = rawUrl ? `${rawUrl}?v=${digitalTwin.version || 1}` : '';
 
   // Background color map
   const bgColors: Record<string, number> = {

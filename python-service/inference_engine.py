@@ -284,6 +284,37 @@ def run_live_inference_and_forecast(
     breach_sensor: Optional[str] = None
     breach_value: Optional[float] = None
 
+    # Check if CURRENT telemetry ALREADY breaches operating limits right now
+    curr_temp_check = float(current_reading.get("Temperature", 40.0))
+    curr_vib_check = float(current_reading.get("Vibration", 0.12))
+    curr_cur_check = float(current_reading.get("Current", 5.0))
+    curr_rpm_check = float(current_reading.get("RPM", 1480.0))
+
+    if curr_temp_check >= max_temp:
+        remaining_operating_hours = 0
+        breach_sensor = "Temperature"
+        breach_value = curr_temp_check
+        is_anomaly = True
+        anomaly_score = max(anomaly_score, 0.95)
+    elif curr_vib_check >= max_vib:
+        remaining_operating_hours = 0
+        breach_sensor = "Vibration"
+        breach_value = curr_vib_check
+        is_anomaly = True
+        anomaly_score = max(anomaly_score, 0.95)
+    elif curr_cur_check >= max_cur:
+        remaining_operating_hours = 0
+        breach_sensor = "Current"
+        breach_value = curr_cur_check
+        is_anomaly = True
+        anomaly_score = max(anomaly_score, 0.95)
+    elif min_rpm > 0 and curr_rpm_check <= min_rpm:
+        remaining_operating_hours = 0
+        breach_sensor = "RPM"
+        breach_value = curr_rpm_check
+        is_anomaly = True
+        anomaly_score = max(anomaly_score, 0.95)
+
     # Track rates of change to identify primary degrading sensors
     sensor_degradation_scores: Dict[str, float] = {}
 
@@ -370,7 +401,13 @@ def run_live_inference_and_forecast(
     total_latency_ms = round((t_end - t0) * 1000, 2)
 
     # 7. Time-Aware Maintenance Calculation Outputs
-    if remaining_operating_hours is None:
+    if remaining_operating_hours == 0:
+        estimated_maintenance_date = "IMMEDIATE EMERGENCY MAINTENANCE REQUIRED"
+        estimated_failure_window = "Immediate Breach"
+        confidence_score = 99
+        primary_degradation_factors = [f"Critical Limit Breach on {breach_sensor} ({breach_value})"]
+        rsot_formatted = f"CRITICAL LIMIT BREACH (0 operating hours left - Emergency Inspection Required)"
+    elif remaining_operating_hours is None:
         # Calculate dynamic remaining operating hours based on composite multi-sensor distance to limits
         curr_temp = float(current_reading.get("Temperature", 40.0))
         curr_vib = float(current_reading.get("Vibration", 0.12))

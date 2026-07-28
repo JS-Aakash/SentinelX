@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { Machine } from '@/types';
 import { machinesApi } from '@/api/machines';
@@ -12,6 +14,8 @@ import {
   AlertCircle,
   Loader2,
   Clock,
+  Save,
+  PackagePlus,
 } from 'lucide-react';
 
 interface Props {
@@ -22,7 +26,10 @@ interface Props {
 export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
   const [training, setTraining] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [savedDatasetInfo, setSavedDatasetInfo] = useState<{ version: number; rowCount: number } | null>(null);
   const [availableDatasets, setAvailableDatasets] = useState<any[]>([]);
   const [selectedDatasetIds, setSelectedDatasetIds] = useState<string[]>([]);
 
@@ -34,18 +41,20 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
     return () => clearInterval(interval);
   }, [machine.isRecording, onRefresh]);
 
-  useEffect(() => {
-    const fetchDatasets = async () => {
-      try {
-        const res = await import('@/api/datasets').then(m => m.datasetsApi.getByMachine(machine._id || machine.id));
-        if (res.data.success && res.data.data) {
-          setAvailableDatasets(res.data.data);
-        }
-      } catch (err) {
-        console.error(err);
+  const fetchDatasets = async () => {
+    try {
+      const res = await import('@/api/datasets').then(m => m.datasetsApi.getByMachine(machine._id || machine.id));
+      if (res.data.success && res.data.data) {
+        setAvailableDatasets(res.data.data);
       }
-    };
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
     fetchDatasets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [machine._id, machine.id]);
 
   const stats = machine.liveDataCollection || {
@@ -100,6 +109,27 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
       await machinesApi.downloadLiveDataset(machine._id || machine.id, `live_dataset_${machine.machineCode}.csv`);
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to download dataset CSV');
+    }
+  };
+
+  const handleSaveProgress = async () => {
+    setSaving(true);
+    try {
+      const res = await machinesApi.saveProgressAsDataset(machine._id || machine.id);
+      if (res.data.data?.dataset) {
+        setSavedDatasetInfo({
+          version: res.data.data.dataset.version,
+          rowCount: res.data.data.dataset.rowCount,
+        });
+      }
+      setShowSaveConfirm(false);
+      // Refresh datasets list to show the newly saved dataset
+      await fetchDatasets();
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to save progress as dataset');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -172,6 +202,19 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
             style={{ width: `${Math.max(2, progressPct)}%` }}
           />
         </div>
+
+        {/* Saved Dataset Success Banner */}
+        {savedDatasetInfo && (
+          <div className="flex items-center justify-between gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono">
+            <div className="flex items-center gap-2">
+              <PackagePlus size={15} className="shrink-0" />
+              <span>
+                <strong>Dataset v{savedDatasetInfo.version}</strong> saved & feature-engineered successfully — {savedDatasetInfo.rowCount.toLocaleString()} samples bundled. Collection reset to 0.
+              </span>
+            </div>
+            <button onClick={() => setSavedDatasetInfo(null)} className="text-emerald-600 hover:text-emerald-300 text-[10px] ml-2 shrink-0">✕</button>
+          </div>
+        )}
 
         {/* Readiness Notification Box */}
         {isReadyForTraining ? (
@@ -270,7 +313,8 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
 
       {/* Action Buttons Ribbon */}
       <div className="flex items-center justify-between gap-3 pt-1 flex-wrap relative z-10 font-mono">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Train / Retrain */}
           <button
             type="button"
             onClick={handleTrainModel}
@@ -295,6 +339,20 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
               : `Collecting Data (${sampleCount.toLocaleString()} / ${threshold.toLocaleString()})`}
           </button>
 
+          {/* Save Progress as Dataset */}
+          {sampleCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowSaveConfirm(true)}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-bold border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-all active:scale-95 shadow-sm"
+            >
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              Save as Dataset
+            </button>
+          )}
+
+          {/* CSV Download */}
           {sampleCount > 0 && (
             <button
               type="button"
@@ -318,6 +376,57 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
           </button>
         )}
       </div>
+
+      {/* Save Progress Confirmation Modal */}
+      {showSaveConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="glass rounded-2xl p-6 max-w-md w-full border border-emerald-500/40 space-y-4">
+            <div className="flex items-center gap-3 text-emerald-400">
+              <PackagePlus size={22} />
+              <h4 className="text-base font-bold text-white">Save Progress as Dataset?</h4>
+            </div>
+
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 space-y-2">
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-[#94A3B8]">Samples to bundle</span>
+                <span className="text-white font-bold">{sampleCount.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-[#94A3B8]">Action</span>
+                <span className="text-emerald-400 font-bold">Clean → Engineer Features → Save as Dataset</span>
+              </div>
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-[#94A3B8]">After saving</span>
+                <span className="text-[#38BDF8] font-bold">Counter resets to 0 / {threshold.toLocaleString()}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-[oklch(0.60_0.01_240)]">
+              This will persist the current <strong className="text-white">{sampleCount.toLocaleString()} samples</strong> as a new Dataset version for{' '}
+              <strong className="text-white">{machine.name}</strong>. The dataset will be automatically cleaned and feature-engineered so it is ready for model training. The live recording counter will reset to 0 and collection will continue.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSaveConfirm(false)}
+                className="px-4 py-2 rounded-xl border border-[oklch(0.24_0.01_240)] text-xs text-slate-300 hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveProgress}
+                disabled={saving}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white flex items-center gap-2"
+              >
+                {saving && <Loader2 size={12} className="animate-spin" />}
+                {saving ? 'Saving...' : 'Save & Reset'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Clear Confirmation Modal */}
       {showClearConfirm && (

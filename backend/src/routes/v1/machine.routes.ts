@@ -17,6 +17,7 @@ import {
   toggleDataRecording,
   updateAILifecycleStatus,
   clearMachineLiveDataset,
+  saveProgressAsDataset,
   downloadMachineLiveDataset,
   trainFromLiveDataset,
   uploadDigitalTwinModel,
@@ -67,6 +68,7 @@ router.put('/:id', isEngineer, validate(updateMachineSchema), updateMachine);
 router.patch('/:id/recording', isEngineer, validate(machineIdParamSchema), toggleDataRecording);
 router.patch('/:id/ai-lifecycle', isEngineer, validate(machineIdParamSchema), updateAILifecycleStatus);
 router.post('/:id/dataset/clear', isEngineer, validate(machineIdParamSchema), clearMachineLiveDataset);
+router.post('/:id/dataset/save-progress', isEngineer, validate(machineIdParamSchema), saveProgressAsDataset);
 router.post('/:id/train-live', isEngineer, validate(machineIdParamSchema), trainFromLiveDataset);
 router.post(
   '/:id/image',
