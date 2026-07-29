@@ -16,6 +16,21 @@ import { logger } from './utils/logger';
 
 const app = express();
 
+// ─── Universal Preflight & CORS Interceptor ─────────────────────────────────
+app.use((req, res, next) => {
+  const origin = req.headers.origin || '*';
+  res.header('Access-Control-Allow-Origin', origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || '*');
+  res.header('Access-Control-Expose-Headers', '*');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
 // ─── Security Middleware ────────────────────────────────────────────────────
 app.use(
   helmet({

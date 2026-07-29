@@ -13,7 +13,7 @@ export const globalRateLimiter = rateLimit({
     success: false,
     message: 'Too many requests, please try again later.',
   },
-  skip: (req) => env.NODE_ENV === 'development' || isLocalIp(req.ip || ''),
+  skip: (req) => req.method === 'OPTIONS' || env.NODE_ENV === 'development' || isLocalIp(req.ip || ''),
 });
 
 export const authRateLimiter = rateLimit({
@@ -25,6 +25,6 @@ export const authRateLimiter = rateLimit({
     success: false,
     message: 'Too many authentication attempts, please try again later.',
   },
-  skip: (req) => env.NODE_ENV === 'development' || isLocalIp(req.ip || ''),
+  skip: (req) => req.method === 'OPTIONS' || env.NODE_ENV === 'development' || isLocalIp(req.ip || ''),
   skipSuccessfulRequests: true,
 });
