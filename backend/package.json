@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon --watch src --ext ts,json --exec tsx src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node --max-old-space-size=400 dist/server.js",
     "type-check": "tsc --noEmit",
     "simulate:esp32": "tsx src/utils/mqttTestPublisher.ts"
   },
