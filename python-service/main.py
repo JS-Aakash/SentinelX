@@ -49,6 +49,7 @@ class ClearCacheRequest(BaseModel):
     machine_id: Optional[str] = None
 
 @app.get("/")
+@app.head("/")
 def read_root():
     return {
         "service": "SentinelX AI Model Service",
@@ -64,6 +65,7 @@ def read_root():
     }
 
 @app.get("/health")
+@app.head("/health")
 def health_check():
     return {"status": "ok"}
 

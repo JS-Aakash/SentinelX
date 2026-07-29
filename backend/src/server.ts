@@ -73,13 +73,16 @@ app.use('/uploads', (req, res, next) => {
 app.use('/api/v1', v1Routes);
 
 // ─── Root health check ──────────────────────────────────────────────────────
-app.get('/', (_req, res) => {
-  res.json({
+app.get(['/', '/health'], (_req, res) => {
+  res.status(200).json({
     success: true,
     message: '🛡️ SentinelX API – Predict. Prevent. Prolong.',
     version: '1.0.0',
     docs: '/api/v1/health',
   });
+});
+app.head(['/', '/health'], (_req, res) => {
+  res.status(200).end();
 });
 
 // ─── Error Handling ─────────────────────────────────────────────────────────
