@@ -713,9 +713,17 @@ export class DatasetService {
     // Collect all rows from all selected datasets + live recorded dataset file if present
     let allRows: Record<string, any>[] = [];
     for (const d of datasets) {
-      const sourcePath = d.cleanedFilePath || d.originalFilePath;
-      if (fs.existsSync(sourcePath)) {
-        const rows = await this.parseUploadedFile(sourcePath);
+      const pathsToCheck = [d.engineeredFilePath, d.cleanedFilePath, d.originalFilePath].filter((p): p is string => Boolean(p));
+      let foundPath: string | null = null;
+      for (const p of pathsToCheck) {
+        if (fs.existsSync(p)) {
+          foundPath = p;
+          break;
+        }
+      }
+
+      if (foundPath) {
+        const rows = await this.parseUploadedFile(foundPath);
         allRows.push(...rows);
       }
     }

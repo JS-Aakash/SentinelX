@@ -190,7 +190,7 @@ export const generateFeatures = asyncHandler(async (req: Request, res: Response)
 
 export const activateDatasetVersion = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params as Record<string, string>;
-  const { isActive } = req.body as { isActive?: boolean };
+  const isActive = req.body?.isActive;
   const companyId = req.user!.companyId.toString();
 
   const dataset = await Dataset.findOne({ _id: id, companyId }).exec();

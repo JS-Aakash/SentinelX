@@ -636,7 +636,8 @@ const SensorSliderControl: React.FC<SliderProps> = ({
   const handleStep = (delta: number) => {
     lockUserInteraction();
     setVal((prevVal) => {
-      const nextVal = Number((prevVal + delta).toFixed(2));
+      const current = typeof prevVal === 'number' && !isNaN(prevVal) ? prevVal : min;
+      const nextVal = Number((current + delta).toFixed(2));
       const clamped = Math.max(min, Math.min(max, nextVal));
       onChange(clamped);
       return clamped;
