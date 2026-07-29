@@ -29,6 +29,16 @@ export class AIService {
       throw ApiError.notFound('Machine not found');
     }
 
+    // 0. If a live telemetry dataset CSV exists on disk for this machine, automatically register & process it first
+    try {
+      const livePath = DatasetService.getLiveDatasetFilePath(machineId);
+      if (fs.existsSync(livePath)) {
+        await DatasetService.registerDatasetFromLiveRecording(machineId, userId);
+      }
+    } catch {
+      // Non-fatal if live recording was empty or already registered
+    }
+
     // 1. Combine requested or available historical datasets for machine (multi-period time-gap aware merging)
     let datasets: IDataset[] = [];
     if (datasetIds && datasetIds.length > 0) {
@@ -41,7 +51,7 @@ export class AIService {
     }
 
     if (datasets.length === 0) {
-      throw ApiError.badRequest('No historical datasets found for this machine. Upload at least one dataset first.');
+      throw ApiError.badRequest('No datasets available to train this machine. Turn on Data Recording to collect live samples or upload a dataset first.');
     }
 
     let activeDataset: IDataset;
