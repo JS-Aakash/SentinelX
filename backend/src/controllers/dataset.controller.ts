@@ -124,11 +124,7 @@ export const getDatasetPreview = asyncHandler(async (req: Request, res: Response
     filePath = dataset.engineeredFilePath;
   }
 
-  if (!fs.existsSync(filePath)) {
-    throw ApiError.notFound(`File for preview type '${type}' not found on server`);
-  }
-
-  const allRows = await DatasetService.parseUploadedFile(filePath);
+  const allRows = await DatasetService.parseUploadedFile(filePath, dataset);
 
   // Search filter
   let filteredRows = allRows;

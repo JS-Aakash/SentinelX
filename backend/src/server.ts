@@ -67,7 +67,15 @@ app.use('/uploads', (req, res, next) => {
       res.setHeader('Content-Type', 'model/gltf+json');
     }
   },
-}));
+}), (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.header('Access-Control-Allow-Headers', '*');
+  res.status(404).json({
+    success: false,
+    message: `File not found on server disk: ${req.path}`,
+  });
+});
 
 // ─── API Routes ─────────────────────────────────────────────────────────────
 app.use('/api/v1', v1Routes);

@@ -9,6 +9,12 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction
 ): void => {
+  // Ensure CORS headers are attached to all error responses
+  if (req.headers.origin) {
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+
   logger.error(`${req.method} ${req.path} - ${err.message}`, {
     stack: env.NODE_ENV === 'development' ? err.stack : undefined,
   });
@@ -62,6 +68,10 @@ export const errorHandler = (
   });
 };
 
-export const notFoundHandler = (req: Request, _res: Response, next: NextFunction): void => {
+export const notFoundHandler = (req: Request, res: Response, next: NextFunction): void => {
+  if (req.headers.origin) {
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
   next(ApiError.notFound(`Route ${req.method} ${req.path} not found`));
 };
