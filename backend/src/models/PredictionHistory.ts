@@ -52,6 +52,11 @@ export interface IPredictionHistory extends Document {
   violatingSensor?: string | null;
   healthScore: number;
   healthStatus: HealthStatus;
+  machineDegradationIndex?: number;
+  machineWearIndex?: number;
+  currentStressIndex?: number;
+  explainabilityAttribution?: Record<string, number>;
+  degradationVelocities?: Record<string, number>;
   isAnomaly: boolean;
   anomalyScore: number;
   recommendations: IRecommendation[];
@@ -116,6 +121,11 @@ const PredictionHistorySchema = new Schema<IPredictionHistory>(
       enum: ['Excellent', 'Good', 'Warning', 'Critical'],
       default: 'Excellent',
     },
+    machineDegradationIndex: { type: Number, default: 0 },
+    machineWearIndex: { type: Number, default: 0 },
+    currentStressIndex: { type: Number, default: 0 },
+    explainabilityAttribution: { type: Schema.Types.Mixed },
+    degradationVelocities: { type: Schema.Types.Mixed },
     isAnomaly: { type: Boolean, default: false },
     anomalyScore: { type: Number, default: 0 },
     recommendations: [

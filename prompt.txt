@@ -1,679 +1,727 @@
-Redesign Health Score & RSOT into a True Time-Aware Machine Degradation Engine
 
-The current SentinelX implementation predicts the next sensor values using machine-specific XGBoost models and then derives Health Score and RSOT through deterministic formulas and recursive forecasting. While functional, this causes Health Score to react too strongly to normal daily sensor variations and makes RSOT dependent on repeated next-step predictions.
 
-I want to redesign this into a Machine Lifecycle & Degradation Engine suitable for real industrial deployment.
+The current implementation assumes every machine has exactly six sensors (Temperature, Vibration, Current, Voltage, RPM, and Sound). This is unrealistic because industrial machines have different sensor configurations. Refactor the entire application to support **dynamic sensor configurations** while preserving the current six sensors as the default template.
 
-Overall Objective
+## Objective
 
-Shift the philosophy from:
+Make SentinelX sensor-agnostic.
 
-Current Sensor Values → Health → RSOT
+Every machine should define its own sensors during registration, and every module (dashboard, AI, IoT, simulation, analytics, prediction, etc.) must automatically adapt to that configuration.
 
-to
+---
 
-Machine Lifecycle + Historical Degradation + Current Condition → Machine Degradation Index → Health Score → RSOT
+# 1. Default Configuration
 
-The Health Score should represent long-term machine condition, not today's sensor values.
+When registering a new machine, pre-populate these sensors:
 
-The RSOT should represent remaining safe operating life, not merely the first predicted threshold breach.
+* Temperature ×1
+* Vibration ×1
+* Current ×1
+* Voltage ×1
+* RPM ×1
+* Sound ×1
 
-1. Introduce Machine Degradation Index (MDI)
+The user can leave these unchanged or edit them.
 
-Create a new internal variable called
+---
 
-Machine Degradation Index (MDI)
+# 2. Dynamic Sensor Configuration
 
-Range
+During machine registration, add a new section:
 
-0 → 100
+## Sensor Configuration
 
-where
+For every sensor:
 
-0 = Brand New Machine
+* Sensor Type
+* Display Name
+* Count
+* Unit
+* Enabled
 
-100 = End of Safe Life
+Example:
 
-The UI may still show only Health Score.
+Temperature
 
-Internally
+Count: 2
 
-Health Score = 100 − MDI
+Names
 
-Unlike the current implementation,
+* Bearing Temperature
+* Coolant Temperature
 
-MDI must evolve slowly.
+Unit
 
-It should NOT fluctuate because one sensor temporarily rises for a few minutes.
+°C
+
+---
+
+Vibration
+
+Count: 3
+
+Names
+
+* Motor
+* Shaft
+* Housing
+
+Unit
+
+mm/s
+
+---
+
+Pressure
+
+Count: 2
+
+Names
+
+* Inlet Pressure
+* Outlet Pressure
+
+Unit
+
+bar
+
+---
+
+Flow
+
+Count: 1
+
+Unit
+
+L/min
+
+---
+
+Oil Level
+
+Count: 1
+
+---
+
+Humidity
+
+Count: 1
+
+---
+
+Custom Sensor
+
+Allow users to create completely custom sensors.
 
 Example
 
-Bad
+Lubrication Quality
 
-Day 1
+Unit
 
-Health
+%
 
-82%
+Everything should be editable.
 
-Day 2
+---
 
-76%
+# 3. Database Changes
 
-Day 3
+Do NOT hardcode columns like
 
-83%
+Temperature
 
-Day 4
+Vibration
 
-74%
+RPM
 
-Good
+Instead create
 
-Day 1
+Machine
 
-82%
+↓
 
-Day 2
+Sensors
 
-81.8%
+Each sensor contains
 
-Day 3
+* sensorId
+* type
+* displayName
+* unit
+* order
+* enabled
+* minLimit
+* ratedValue
+* maxLimit
+* weight(optional)
 
-81.6%
+Example
 
-Day 4
+Machine DG001
 
-81.4%
+↓
 
-2. Separate Current Condition from Long-Term Degradation
+Bearing Temp
 
-Current sensor values should NOT dominate the Health Score.
+Coolant Temp
+
+Motor Vibration
+
+Pressure In
+
+Pressure Out
+
+Current
+
+Voltage
+
+RPM
+
+---
+
+# 4. Machine Page
+
+Completely remove fixed sensor cards.
+
+Generate every sensor dynamically.
+
+Example
+
+Bearing Temperature
+
+↓
+
+Current value
+
+Trend
+
+Stress
+
+Graph
+
+---
+
+Coolant Temperature
+
+↓
+
+Graph
+
+Stress
+
+Trend
+
+If machine has
+
+5 pressure sensors
+
+show
+
+5 pressure cards.
+
+---
+
+# 5. Dashboard
+
+Dashboard widgets should automatically adapt.
+
+Health Summary
+
+↓
+
+Sensor Health
+
+↓
+
+Dynamic sensor list
+
+Top Stress Sensors
+
+↓
+
+Generated automatically
+
+Latest Readings
+
+↓
+
+Generated automatically
+
+Charts
+
+↓
+
+Generate one chart per configured sensor.
+
+---
+
+# 6. Historical Dataset Upload
+
+Do NOT require fixed columns.
 
 Instead
 
-Health Score should consist of
+Generate expected CSV template based on machine configuration.
 
-70% Historical Degradation
+Example
 
-20% Recent Trend
+Timestamp
 
-10% Current Instantaneous Condition
+Bearing Temp
 
-Historical
+Coolant Temp
 
-Long-term wear accumulated over months
+Motor Vibration
 
-Recent Trend
+Housing Vibration
 
-Last few days
+Pressure In
+
+Pressure Out
 
 Current
 
-Current operating condition
+Voltage
 
-Example
+RPM
 
-A hot day increases temperature.
+Validate dynamically.
 
-Health should barely change.
+---
 
-Continuous high temperatures over weeks should gradually reduce Health.
+# 7. Feature Engineering
 
-3. Machine Lifecycle Awareness
+Current feature engineering is hardcoded.
 
-Every prediction should consider
+Rewrite it.
 
-Installation Date
+For every configured sensor automatically generate
 
-Machine Age
+Lag1
 
-Operating Hours
+Lag2
 
-Days Since Last Maintenance
+Lag3
 
-Operating Hours Since Last Maintenance
-
-Machine Lifecycle Stage
-
-Example
-
-Installed
-
-↓
-
-2000 Hours
-
-↓
-
-Bearing Replaced
-
-↓
-
-4500 Hours
-
-↓
-
-Current
-
-The AI should understand where the machine is in its lifecycle.
-
-4. Time Awareness
-
-Currently timestamps are used mainly for feature engineering.
-
-Expand this.
-
-The model must understand
-
-Calendar Age
-
-Operating Hours
-
-Elapsed Time Between Samples
-
-Time Gaps
-
-Monitoring Gaps
-
-Historical Duration
-
-Example
-
-One month of data collected
-
-every minute
-
-is very different from
-
-one month collected
-
-once per day.
-
-The AI should recognize this through timestamps and delta time.
-
-5. Handle Partial Historical Data
-
-Many industries cannot provide complete historical datasets.
-
-SentinelX should still work.
-
-Example
-
-Installation
-
-January
-
-Available data
-
-June
-
-July
-
-Current
-
-August
-
-The AI should estimate degradation using
-
-Machine Age
-
-Current Operating Hours
-
-Available History
-
-Trend Since Monitoring Started
-
-Missing months should NOT invalidate predictions.
-
-6. Learn Degradation Instead of Only Next-Step Prediction
-
-Current implementation predicts
-
-Temperature(t+1)
-
-Vibration(t+1)
-
-etc.
-
-Retain these models.
-
-But additionally estimate
-
-Long-Term Degradation Velocity
-
-Example
-
-Temperature increasing
-
-0.002°C/hour
-
-RPM decreasing
-
-0.18 RPM/hour
-
-Current increasing
-
-0.004 A/hour
-
-Store degradation rates.
-
-These should influence RSOT more than instantaneous predictions.
-
-7. RSOT Engine Redesign
-
-Current
-
-Recursive forecasting until threshold.
-
-Replace with
-
-Hybrid Lifecycle RSOT.
-
-Inputs
-
-Machine Age
-
-Operating Hours
-
-Current Sensor State
-
-Historical Drift
+EMA
 
 Historical Baseline
 
-Recent Trend
+Cumulative Drift
 
-Degradation Velocity
+Growth Rate
 
-Distance to Safety Limits
+Rolling Mean
 
-Maintenance History
+Rolling Std
 
-Prediction Horizon
+Rate of Change
+
+Recent Slope
+
+Long Term Slope
+
+Distance From Limit
 
 Example
+
+BearingTemp_Lag1
+
+PressureOut_EMA
+
+HousingVibration_RollMean_10
+
+No sensor names should be hardcoded.
+
+---
+
+# 8. Interaction Features
+
+Automatically generate interaction features only for available sensors.
+
+Examples
+
+Temperature × Current
+
+Temperature × Vibration
+
+Pressure × RPM
+
+Current ÷ RPM
+
+etc.
+
+Skip interactions when one sensor does not exist.
+
+---
+
+# 9. AI Training
+
+Training must become completely dynamic.
+
+Current
+
+↓
+
+6 models
+
+↓
+
+Fixed sensors
+
+Replace with
+
+Loop through configured sensors.
+
+For every sensor
+
+Train one prediction model.
+
+Example
+
+Machine
+
+↓
+
+8 sensors
+
+↓
+
+8 prediction models
+
+*
+
+1 anomaly detection model
+
+Inputs
+
+↓
+
+All remaining sensors
+
+*
+
+time features
+
+*
+
+operating hours
+
+*
+
+machine age
+
+Do NOT assume six outputs.
+
+---
+
+# 10. Prediction Page
+
+Generate prediction cards dynamically.
+
+Each sensor displays
+
+Current
+
+Stress
+
+Trend
+
+Prediction
+
+Historical Trend
+
+Forecast
+
+No hardcoded cards.
+
+---
+
+# 11. Health Score
+
+Health score calculation should become dynamic.
+
+Instead of
+
+Temperature
+
+20%
+
+Current
+
+20%
+
+etc.
+
+Calculate based on configured sensors.
+
+Support
+
+Custom weights.
+
+If weights aren't provided
+
+Assign equal weight.
+
+Example
+
+8 sensors
+
+↓
+
+12.5%
+
+each.
+
+---
+
+# 12. Root Cause Analysis
+
+Generate root cause dynamically.
+
+Instead of
 
 Temperature
 
 Current
 
-84
-
-Limit
-
-100
-
-Velocity
-
-0.001°C/hour
-
-Remaining
-
-16000 hours
-
-Do similar calculations for every monitored sensor.
-
-Final
-
-RSOT
-
-Minimum Remaining Safe Hours across all critical parameters.
-
-8. Confidence Score
-
-Every RSOT prediction should include
-
-Confidence
-
-Example
-
-RSOT
-
-14200 hours
-
-Confidence
-
-94%
-
-If
-
-Little historical data
-
-↓
-
-Lower confidence.
-
-If
-
-Long monitoring history
-
-↓
-
-Higher confidence.
-
-9. Maintenance Recovery
-
-Machine Health should improve after maintenance.
-
-Example
-
-Before
-
-Health
-
-58%
-
-Bearing Replacement
-
-↓
-
-Health
-
-78%
-
-Not
-
-100%
-
-because only one component changed.
-
-Maintain
-
-Maintenance Recovery Factor.
-
-Different maintenance actions restore different percentages.
-
-10. Persistence Against Daily Variations
-
-Do NOT allow
-
-One abnormal day
-
-to significantly change Health.
-
-Instead
-
-Maintain
-
-Long-Term Health Memory.
-
-Example
-
-Health
-
-90%
-
-↓
-
-89.9%
-
-↓
-
-89.8%
-
-↓
-
-89.7%
-
-Instead of
-
-90
-
-↓
-
-84
-
-↓
-
-89
-
-↓
-
-83
-
-Daily noise should have very small impact.
-
-11. Differentiate Temporary Stress from Permanent Wear
-
-Example
-
-Generator overloaded
-
-for
-
-10 minutes
-
-↓
-
-Current rises
-
-↓
-
-Temperature rises
-
-↓
-
-Returns to normal
-
-This should create
-
-Temporary Stress
-
-NOT
-
-Permanent Degradation.
-
-Permanent degradation should increase only if abnormal behaviour persists.
-
-Implement
-
-Stress Persistence Logic.
-
-12. Dynamic Historical Weighting
-
-Historical influence should change automatically.
-
-Example
-
-One year history
-
-↓
-
-90% historical
-
-10% recent
-
-Only one week history
-
-↓
-
-40% historical
-
-60% recent
-
-The system should automatically adapt based on available historical data.
-
-13. Time Gap Awareness
-
-If
-
-June
-
-↓
-
-August
-
-No data for July
-
-Do NOT assume continuous operation.
-
-Instead
+Voltage
 
 Use
 
-delta_t
-
-Monitoring Gap
-
-Estimated Operating Hours
-
-to correctly model degradation.
-
-14. Historical Baseline Evolution
-
-Baseline should not remain fixed forever.
-
-Machine behaviour naturally changes.
-
-Allow
-
-Healthy Baseline
-
-to slowly evolve over years
-
-without masking degradation.
-
-15. Separate Wear from Instantaneous Stress
-
-Internally maintain
-
-Machine Wear Index
-
-Current Stress Index
-
-Health
-
-should depend mainly on
-
-Wear
-
-Warnings
-
-should depend mainly on
-
-Stress
+Top three highest stress sensors.
 
 Example
 
-Temporary overload
+Bearing Temperature
+
+78%
+
+Pressure Out
+
+52%
+
+Motor Vibration
+
+40%
+
+---
+
+# 13. Sensor Simulation
+
+Current simulator has fixed sliders.
+
+Replace with
+
+Dynamic sliders.
+
+If machine has
+
+Bearing Temp
+
+Coolant Temp
+
+Pressure Out
+
+Generate
+
+three sliders.
+
+Each slider
+
+Current value
+
+Min
+
+Max
+
+Live graph
+
+Everything generated automatically.
+
+---
+
+# 14. IoT Gateway
+
+Incoming payload should become generic.
+
+Instead of
+
+Temperature
+
+Voltage
+
+RPM
+
+Accept
+
+```json
+{
+  "machineId": "DG001",
+  "timestamp": "...",
+  "sensors": {
+    "bearing_temp": 84.5,
+    "coolant_temp": 71.2,
+    "pressure_out": 6.4,
+    "current": 52.3,
+    "rpm": 1478
+  }
+}
+```
+
+Map using sensor IDs.
+
+Backend should never assume fixed sensor names.
+
+---
+
+# 15. ESP32 Integration
+
+Create a configuration endpoint.
+
+When ESP32 connects
 
 ↓
 
-Warning
+Fetch machine configuration.
+
+Firmware knows
+
+which sensors exist
 
 ↓
 
-Health almost unchanged
+Send only available sensors.
 
-Months of overload
+If Pressure sensor not installed
 
 ↓
 
-Health decreases
+Do not send Pressure.
 
-16. Explainability
+If Temp2 installed
 
-Every prediction should explain itself.
+↓
+
+Send Temp2.
+
+Keep the current firmware working for the default six-sensor configuration.
+
+---
+
+# 16. Analytics
+
+Generate analytics dynamically.
+
+Sensor trends
+
+Correlation
+
+Stress ranking
+
+Forecast
+
+All based on configured sensors.
+
+---
+
+# 17. Maintenance
+
+AI recommendations should reference dynamic sensor names.
 
 Example
 
-Health Reduced Because
+Inspect Bearing Temperature
 
-Temperature Drift
+instead of
 
-42%
+Inspect Temperature.
 
-Current Increase
+---
 
-31%
+# 18. Blockchain
 
-Vibration Trend
+Maintenance records should store
 
-19%
-
-RPM Drop
-
-8%
-
-Similarly
-
-RSOT
-
-should explain
-
-which parameter is expected to fail first.
-
-17. Historical Verification
-
-After implementation
-
-verify using these scenarios
-
-Scenario 1
-
-One hot day
+Sensor involved
 
 ↓
 
-Health changes <1%
+Dynamic sensor ID
 
-Scenario 2
+instead of fixed sensor names.
 
-Temperature gradually rises over one month
+---
 
-↓
+# 19. Backward Compatibility
 
-Health decreases gradually
+Very important.
 
-Scenario 3
+Existing machines using
 
-Bearing replaced
+Temperature
 
-↓
+Vibration
 
-Health increases
+Current
 
-Scenario 4
+Voltage
 
-Only installation date + one month dataset available
+RPM
 
-↓
+Sound
 
-Still generates reasonable RSOT
+must continue to work without migration.
 
-Scenario 5
+These remain the default template.
 
-Missing July data
+---
 
-↓
+# 20. Verification Checklist
 
-No sudden degradation spike
+Verify that every page works with:
 
-Scenario 6
+### Machine A
 
-One abnormal sensor packet
+Temperature
 
-↓
+Vibration
 
-Health unchanged
+Current
 
-↓
+Voltage
 
-No anomaly
+RPM
 
-Scenario 7
+Sound
 
-Seven days of increasing vibration
+### Machine B
 
-↓
+Bearing Temp
 
-Health decreases
+Coolant Temp
 
-↓
+Pressure In
 
-RSOT shortens
+Pressure Out
 
-18. Goal
+Current
 
-SentinelX should stop behaving like a simple next-step time-series forecaster and instead behave like a machine lifecycle intelligence system. The Health Score should represent accumulated machine wear with strong historical memory, while RSOT should represent the estimated remaining safe operating life by combining machine age, operating hours, degradation velocity, historical trends, maintenance history, and current operating conditions. The system must remain stable under normal day-to-day sensor fluctuations, adapt gracefully to incomplete historical datasets using installation date and available history, and produce realistic, explainable predictions suitable for real industrial deployments.
+Voltage
+
+RPM
+
+### Machine C
+
+Temperature
+
+Oil Level
+
+Humidity
+
+Flow
+
+No code anywhere should assume there are exactly six sensors. Every chart, table, dataset template, feature-engineering pipeline, AI model, prediction card, simulator control, maintenance recommendation, and analytics view must be generated from the machine's sensor configuration.
+
+**Goal:** SentinelX should become a fully configurable industrial platform where adding or removing sensors requires **no code changes**—only configuration during machine registration.

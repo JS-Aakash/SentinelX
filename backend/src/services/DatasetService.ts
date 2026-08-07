@@ -641,15 +641,28 @@ export class DatasetService {
   }
 
   /**
-   * Generate downloadable sample CSV template with standard headers
+   * Generate downloadable sample CSV template with dynamic headers matching machine configuration
    */
-  public static generateSampleCSV(): string {
-    const headers = this.REQUIRED_COLUMNS.join(',');
+  public static async generateSampleCSV(machineId?: string): Promise<string> {
+    let sensorHeaders = this.REQUIRED_COLUMNS.slice(1);
+    let sampleVals = ['42.5', '0.12', '3.4', '230.1', '1480', '62.0'];
+
+    if (machineId) {
+      try {
+        const machine = await Machine.findById(machineId).exec();
+        if (machine && machine.sensors && machine.sensors.length > 0) {
+          sensorHeaders = machine.sensors.filter((s) => s.enabled).map((s) => s.displayName || s.sensorKey);
+          sampleVals = machine.sensors.filter((s) => s.enabled).map((s) => String(s.ratedValue ?? 50.0));
+        }
+      } catch {}
+    }
+
+    const headers = ['Timestamp', ...sensorHeaders].join(',');
     const sampleRows = [
       headers,
-      '2026-07-18T00:00:00.000Z,42.5,0.12,3.4,230.1,1480,62.0',
-      '2026-07-18T00:00:05.000Z,42.8,0.14,3.5,229.8,1485,62.5',
-      '2026-07-18T00:00:10.000Z,43.1,0.13,3.4,230.2,1482,63.0',
+      `2026-07-18T00:00:00.000Z,${sampleVals.join(',')}`,
+      `2026-07-18T00:00:05.000Z,${sampleVals.join(',')}`,
+      `2026-07-18T00:00:10.000Z,${sampleVals.join(',')}`,
     ];
     return sampleRows.join('\n');
   }

@@ -75,103 +75,126 @@ export class InferenceService {
     return 'Normal';
   }
 
+  // In-Memory Machine Degradation Index (MDI) Cache per machine ID
+  private static MDI_MEMORY_MAP = new Map<string, number>();
+
   /**
-   * Time-Aware & History-Aware Health Score Calculator (EWMA Smoothed, 0-100)
+   * SentinelX Machine Lifecycle & Degradation Engine:
+   * Internally computes Machine Degradation Index (MDI: 0=New, 100=End of Life)
+   * Health Score = 100 - MDI
+   * 
+   * Composition:
+   * - 70% Historical Accumulated Wear (operating hours, machine age, long-term drift)
+   * - 20% Recent Trend (last few days rolling variance)
+   * - 10% Current Instantaneous Stress Index (transient load/temp spikes)
    */
   public static computeHealthScore(
-    reading: { temperature: number; vibration: number; current: number; voltage: number; rpm: number; sound: number },
+    reading: Record<string, number>,
     limits: Record<string, any>,
-    machineId?: string
-  ): { score: number; status: HealthStatus } {
+    machineId?: string,
+    lifecycleMeta?: { machineAgeDays?: number; operatingHours?: number; historyDays?: number; gapRatio?: number },
+    sensorImportance?: Array<{ sensorKey: string; sensorName: string; weight: number; enabled: boolean }>
+  ): { score: number; status: HealthStatus; mdi: number; wearIndex: number; stressIndex: number } {
     const maxTemp = limits.maxTemperature || 80;
     const maxVib = limits.maxVibration || 2.5;
     const maxCur = limits.maxCurrent || 15;
-    const ratedRPM = limits.ratedRPM || 1500;
-    const maxSound = limits.maxSound || 85;
-
-    // 1. Temperature: Values at or below rated baseline are 100% healthy (0 deduction)
-    const ratedTemp = limits.ratedTemperature || 45;
-    const tempExcess = Math.max(0, reading.temperature - ratedTemp);
-    const tempNorm = tempExcess / Math.max(1, maxTemp - ratedTemp);
-    const tempScore = Math.max(0, 100 - tempNorm * 100);
-
-    // 2. Vibration: Values at or below rated baseline are 100% healthy (0 deduction)
-    const ratedVib = limits.ratedVibration || 0.15;
-    const vibExcess = Math.max(0, reading.vibration - ratedVib);
-    const vibNorm = vibExcess / Math.max(0.1, maxVib - ratedVib);
-    const vibScore = Math.max(0, 100 - vibNorm * 100);
-
-    // 3. Current: Values at or below rated baseline are 100% healthy (0 deduction)
-    const ratedCur = limits.ratedCurrent || 3.0;
-    const curExcess = Math.max(0, reading.current - ratedCur);
-    const curNorm = curExcess / Math.max(1, maxCur - ratedCur);
-    const curScore = Math.max(0, 100 - curNorm * 100);
-
-    // 4. Voltage: Within ±8% of nominal 230V is 100% healthy
-    const voltDev = Math.max(0, Math.abs(reading.voltage - 230) - 18.4) / 230;
-    const voltScore = Math.max(0, 100 - voltDev * 250);
-
-    // 5. RPM: If machine is idle/off (low current/RPM), do not penalize as failure
     const minRPM = limits.minRPM || 1000;
-    const isRunning = reading.current >= 0.5 || reading.rpm >= 100;
-    let rpmScore = 100;
-    if (isRunning) {
-      const rpmDrop = Math.max(0, ratedRPM - reading.rpm);
-      const rpmNorm = rpmDrop / Math.max(1, ratedRPM - minRPM);
-      rpmScore = Math.max(0, 100 - rpmNorm * 100);
-    }
+    const ratedTemp = limits.ratedTemperature || 45;
+    const ratedVib = limits.ratedVibration || 0.15;
+    const ratedCur = limits.ratedCurrent || 3.0;
+    const ratedVolt = limits.ratedVoltage || 230;
+    const ratedRPMVal = limits.ratedRPM || 1500;
+    const ratedSoundVal = limits.ratedSound || 60;
 
-    // 6. Sound: Values at or below rated baseline are 100% healthy (0 deduction)
-    const ratedSound = limits.ratedSound || 60;
-    const soundExcess = Math.max(0, reading.sound - ratedSound);
-    const soundNorm = soundExcess / Math.max(1, maxSound - ratedSound);
-    const soundScore = Math.max(0, 100 - soundNorm * 100);
-
-    const weightedAverage = (
-      tempScore * 0.20 +
-      vibScore * 0.20 +
-      curScore * 0.20 +
-      voltScore * 0.15 +
-      rpmScore * 0.15 +
-      soundScore * 0.10
-    );
-
+    const isRunning = (reading.current || 0) >= 0.5 || (reading.rpm || 0) >= 100;
     const isBreached =
-      reading.temperature >= maxTemp ||
-      reading.vibration >= maxVib ||
-      reading.current >= maxCur ||
-      (isRunning && minRPM > 0 && reading.rpm <= minRPM);
+      (reading.temperature || 0) >= maxTemp ||
+      (reading.vibration || 0) >= maxVib ||
+      (reading.current || 0) >= maxCur ||
+      (isRunning && minRPM > 0 && (reading.rpm || 0) <= minRPM);
 
-    const minScore = Math.min(tempScore, vibScore, curScore, voltScore, rpmScore, soundScore);
+    // 1. Calculate Dynamic Weighted Sensor Excess using Configured Sensor Importance & Machine Specs
+    const tempExcess = Math.max(0, (reading.temperature || 0) - ratedTemp) / Math.max(1, maxTemp - ratedTemp);
+    const vibExcess = Math.max(0, (reading.vibration || 0) - ratedVib) / Math.max(0.1, maxVib - ratedVib);
+    const curExcess = Math.max(0, (reading.current || 0) - ratedCur) / Math.max(1, maxCur - ratedCur);
+    const voltExcess = Math.max(0, Math.abs((reading.voltage || ratedVolt) - ratedVolt) - (ratedVolt * 0.05)) / ratedVolt;
+    const rpmExcess = isRunning ? Math.max(0, ratedRPMVal - (reading.rpm || 0)) / Math.max(1, ratedRPMVal - minRPM) : 0;
+    const soundExcess = Math.max(0, (reading.sound || 0) - ratedSoundVal) / 25;
 
-    // If any sensor breaches operating limit, severely penalize instant score
-    let instantScore = Math.round(weightedAverage * 0.4 + minScore * 0.6);
-    if (isBreached) {
-      const maxExcessRatio = Math.max(
-        reading.temperature / maxTemp,
-        reading.vibration / maxVib,
-        reading.current / maxCur,
-        isRunning && minRPM > 0 ? (minRPM / Math.max(1, reading.rpm)) : 1.0
-      );
-      instantScore = Math.max(0, Math.round(35 / Math.max(1, maxExcessRatio)));
+    const sensorExcesses: Record<string, number> = {
+      temperature: tempExcess,
+      vibration: vibExcess,
+      current: curExcess,
+      voltage: voltExcess,
+      rpm: rpmExcess,
+      sound: soundExcess,
+    };
+
+    let totalDriftSum = 0;
+    if (sensorImportance && sensorImportance.length > 0) {
+      const activeSensors = sensorImportance.filter((s) => s.enabled);
+      const totalWeight = activeSensors.reduce((sum, s) => sum + (s.weight || 0), 0) || 100;
+      
+      activeSensors.forEach((s) => {
+        const key = s.sensorKey.toLowerCase();
+        const excess = sensorExcesses[key] ?? 0;
+        const normalizedWeight = (s.weight / totalWeight);
+        totalDriftSum += excess * normalizedWeight * 4.0; // Scaled to maintain calibration
+      });
+    } else {
+      totalDriftSum = tempExcess + vibExcess + curExcess + voltExcess + rpmExcess + soundExcess;
     }
-    const instantClamped = Math.max(0, Math.min(100, instantScore));
 
-    // EWMA Historical Trend Anchoring (92% historical weight for smooth daily stability; 90% instant on breach)
-    let scoreClamped = instantClamped;
+    const currentStressIndex = Math.min(100, Math.round(totalDriftSum * 25));
+
+    // 2. Machine Lifecycle & Historical Wear Index (MWI) (70% weight baseline)
+    const ageDays = lifecycleMeta?.machineAgeDays ?? 180;
+    const opHours = lifecycleMeta?.operatingHours ?? ageDays * 18;
+    const historyDays = lifecycleMeta?.historyDays ?? Math.max(7, ageDays * 0.8);
+
+    const baseLifecycleWear = Math.min(35, (opHours / 1000) * 1.2 + (ageDays / 365) * 1.5);
+    const machineWearIndex = Math.min(75, baseLifecycleWear + totalDriftSum * 12);
+
+    // 3. Recent Trend (20% weight baseline)
+    const recentTrendIndex = Math.min(80, totalDriftSum * 18);
+
+    // 4. Dynamic Historical Weighting Adaptability
+    // 1 year history -> 90% historical weight; 1 week history -> 40% historical weight
+    const wHist = Math.max(0.40, Math.min(0.90, 0.40 + 0.50 * (historyDays / 365)));
+    const wRem = 1.0 - wHist;
+    const wRecent = wRem * 0.70;
+    const wInstant = wRem * 0.30;
+
+    const compositeMDI = (wHist * machineWearIndex) + (wRecent * recentTrendIndex) + (wInstant * currentStressIndex);
+
+    // 5. Monotonic Health Memory Integration (Daily noise changes health by <1%)
+    let mdiSmoothed = compositeMDI;
     if (machineId) {
-      const prevSmoothed = HEALTH_SCORE_CACHE.get(machineId) ?? instantClamped;
-      const alpha = isBreached || instantClamped < 40 ? 0.90 : 0.08;
-      scoreClamped = Math.round(alpha * instantClamped + (1 - alpha) * prevSmoothed);
-      HEALTH_SCORE_CACHE.set(machineId, scoreClamped);
+      const prevMDI = this.MDI_MEMORY_MAP.get(machineId) ?? compositeMDI;
+      if (isBreached) {
+        mdiSmoothed = Math.min(100, Math.max(80, compositeMDI * 1.4));
+      } else {
+        // Smooth monotonic update (2% new, 98% memory)
+        mdiSmoothed = 0.98 * prevMDI + 0.02 * compositeMDI;
+      }
+      this.MDI_MEMORY_MAP.set(machineId, mdiSmoothed);
     }
+
+    const roundedMDI = Number(mdiSmoothed.toFixed(2));
+    const scoreClamped = Math.max(0, Math.min(100, Math.round(100 - roundedMDI)));
 
     let status: HealthStatus = 'Excellent';
     if (scoreClamped < 50) status = 'Critical';
     else if (scoreClamped < 75) status = 'Warning';
     else if (scoreClamped < 90) status = 'Good';
 
-    return { score: scoreClamped, status };
+    return {
+      score: scoreClamped,
+      status,
+      mdi: roundedMDI,
+      wearIndex: Number(machineWearIndex.toFixed(1)),
+      stressIndex: Number(currentStressIndex.toFixed(1)),
+    };
   }
 
   /**
@@ -531,7 +554,15 @@ export class InferenceService {
       PERSISTENCE_STATE_CACHE.set(mIdStr, pState);
     }
 
-    const { score: healthScore, status: healthStatus } = this.computeHealthScore(currentReading, limits, mIdStr);
+    const { score: calculatedHealthScore, status: calculatedHealthStatus, mdi: calculatedMDI, wearIndex, stressIndex } = this.computeHealthScore(currentReading, limits, mIdStr, { machineAgeDays, operatingHours }, machine?.sensorImportance);
+    const healthScore = pyResult.health_score ?? calculatedHealthScore;
+    const healthStatus = pyResult.health_status ?? calculatedHealthStatus;
+    const mdi = pyResult.machine_degradation_index ?? calculatedMDI;
+    const mwi = pyResult.machine_wear_index ?? wearIndex;
+    const csi = pyResult.current_stress_index ?? stressIndex;
+    const explainability = pyResult.explainability_attribution ?? { Temperature: 30, Vibration: 30, Current: 20, RPM: 10, Sound: 5, Voltage: 5 };
+    const velocities = pyResult.degradation_velocities ?? {};
+
     const recommendations = this.generateRecommendations(currentReading, pyResult.predicted_next, limits, healthScore, rawIsAnomaly);
 
     const traj = pyResult.forecast_trajectory || pyResult.forecastTrajectory || [];
@@ -541,7 +572,7 @@ export class InferenceService {
     const estDate = pyResult.estimated_maintenance_date || pyResult.estimatedMaintenanceDate || new Date(nowMs + remHours * 3600 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const estWindow = pyResult.estimated_failure_window || pyResult.estimatedFailureWindow || 'Next 6–12 Months';
     const confScore = pyResult.confidence_score || pyResult.confidenceScore || 94;
-    const primarySensors = pyResult.primary_degrading_sensors || pyResult.primaryDegradingSensors || (temperature > 70 ? ['Temperature'] : vibration > 2.0 ? ['Vibration'] : []);
+    const primarySensors = pyResult.primary_degradation_factors || pyResult.primaryDegradingSensors || (temperature > 70 ? ['Temperature'] : vibration > 2.0 ? ['Vibration'] : []);
 
     const predictionDoc = await PredictionHistory.create({
       machineId: machine!._id,
@@ -563,6 +594,11 @@ export class InferenceService {
       rsotFormatted: `Healthy (${remHours.toLocaleString()} operating hours)`,
       healthScore,
       healthStatus,
+      machineDegradationIndex: mdi,
+      machineWearIndex: mwi,
+      currentStressIndex: csi,
+      explainabilityAttribution: explainability,
+      degradationVelocities: velocities,
       isAnomaly: rawIsAnomaly,
       anomalyScore: rawAnomalyScore,
       recommendations,
@@ -585,6 +621,11 @@ export class InferenceService {
       rsotFormatted: `Healthy (${remHours.toLocaleString()} operating hours)`,
       healthScore,
       healthStatus,
+      machineDegradationIndex: mdi,
+      machineWearIndex: mwi,
+      currentStressIndex: csi,
+      explainabilityAttribution: explainability,
+      degradationVelocities: velocities,
       isAnomaly: rawIsAnomaly,
       anomalyScore: rawAnomalyScore,
       severity,

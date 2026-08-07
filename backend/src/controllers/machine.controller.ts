@@ -55,6 +55,23 @@ export const getMachineById = asyncHandler(async (req: Request, res: Response): 
   sendSuccess(res, 'Machine retrieved successfully', machine);
 });
 
+export const getMachineConfig = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params as Record<string, string>;
+  const machine = await machineService.getMachineById(id, req.user!.companyId);
+  const { DEFAULT_SENSOR_CONFIGS } = await import('../models/Machine');
+  const sensors = machine.sensors && machine.sensors.length > 0 ? machine.sensors : DEFAULT_SENSOR_CONFIGS;
+
+  sendSuccess(res, 'Machine dynamic configuration retrieved successfully', {
+    machineId: machine._id,
+    machineCode: machine.machineCode,
+    name: machine.name,
+    type: machine.type,
+    operatingLimits: machine.operatingLimits,
+    sensors,
+    sensorImportance: machine.sensorImportance,
+  });
+});
+
 // ─── Create Machine ───────────────────────────────────────────────────────────
 
 export const createMachine = asyncHandler(async (req: Request, res: Response): Promise<void> => {

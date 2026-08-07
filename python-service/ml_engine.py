@@ -8,28 +8,32 @@ from typing import Dict, Any, List, Tuple
 from xgboost import XGBRegressor
 from sklearn.ensemble import IsolationForest
 
-TARGET_SENSORS = ["Temperature", "Vibration", "Current", "Voltage", "RPM", "Sound"]
+DEFAULT_TARGET_SENSORS = ["Temperature", "Vibration", "Current", "Voltage", "RPM", "Sound"]
 
-def extract_time_aware_features(df: pd.DataFrame) -> pd.DataFrame:
+def extract_time_aware_features(df: pd.DataFrame, target_sensors: List[str] = None) -> Tuple[pd.DataFrame, List[str]]:
     """
-    Generate time-aware sequence features per sensor:
-    - Lag features (t-1, t-2, t-5, t-10)
-    - Rolling window statistics (rolling mean 5/15, rolling std 5/15)
+    Generate dynamic time-aware sequence features per sensor:
+    - Lag features (t-1, t-2, t-5)
+    - Rolling window statistics (rolling mean 5/15, rolling std 5)
     - Rate-of-change derivatives (diff1, diff5)
-    
-    If 'sequence_id' or 'dataset_id' is present (multi-dataset merged CSVs),
-    computes time-aware features within each sequence independently.
     """
     df_out = df.copy()
 
-    # Identify grouping column for multi-dataset boundaries
+    # Identify non-sensor metadata columns
+    meta_cols = ["Timestamp", "timestamp", "sequence_id", "dataset_id", "source_dataset", "delta_t_hours", "time_since_last_observation_hours", "elapsed_days", "operating_hours", "machine_age_days"]
+    
+    if not target_sensors:
+        target_sensors = [c for c in df_out.columns if c not in meta_cols and not c.endswith(("_Lag1", "_Lag2", "_Lag3", "_EMA", "_historical_baseline", "_cumulative_drift", "_growth_rate_per_day", "_RollMean_5", "_RollStd_5", "_RoC", "_long_term_slope", "_recent_slope", "_LimitDist"))]
+        if not target_sensors:
+            target_sensors = DEFAULT_TARGET_SENSORS
+
     group_col = None
     for col in ["sequence_id", "dataset_id", "source_dataset"]:
         if col in df_out.columns:
             group_col = col
             break
 
-    for sensor in TARGET_SENSORS:
+    for sensor in target_sensors:
         col_name = sensor if sensor in df_out.columns else next((c for c in df_out.columns if c.lower() == sensor.lower()), None)
         if not col_name:
             continue
@@ -55,23 +59,20 @@ def extract_time_aware_features(df: pd.DataFrame) -> pd.DataFrame:
             df_out[f"{sensor}_diff1"] = s_series.diff(1).fillna(0)
             df_out[f"{sensor}_diff5"] = s_series.diff(5).fillna(0)
 
-    # Backfill & forward fill lag NaNs
     df_out = df_out.bfill().ffill().fillna(0)
-    return df_out
+    return df_out, target_sensors
 
 def train_machine_models(
     machine_id: str,
     dataset_path: str,
     model_version: int,
     output_dir: str,
-    operating_limits: Dict[str, float] = None
+    operating_limits: Dict[str, float] = None,
+    custom_target_sensors: List[str] = None
 ) -> Dict[str, Any]:
     """
-    Train 6 independent XGBoost Regressors (one per sensor target) 
+    Train 1 independent XGBoost Regressor per configured sensor target
     and 1 Isolation Forest model for anomaly detection.
-    
-    Each XGBoost regressor predicts ONLY its target sensor at [t+1], 
-    using the COMPLETE time-aware engineered feature set as input.
     """
     start_time = time.time()
     
@@ -82,33 +83,25 @@ def train_machine_models(
     if df_raw.empty:
         raise ValueError("Engineered dataset file is empty")
 
-    # Extract time-aware sequential features (lags, rolling averages, derivatives)
-    df = extract_time_aware_features(df_raw)
+    # Extract time-aware sequential features dynamically
+    df, target_sensors = extract_time_aware_features(df_raw, custom_target_sensors)
         
-    # Drop timestamp and ID metadata from input features
     non_feature_cols = ["Timestamp", "timestamp", "sequence_id", "dataset_id", "source_dataset"]
     feature_cols = [c for c in df.columns if c not in non_feature_cols]
     
     if len(feature_cols) == 0:
         raise ValueError("No numeric feature columns found in dataset")
         
-    X = df[feature_cols].copy()
+    X = df[feature_cols].copy().ffill().bfill().fillna(0)
     
-    # Fill any remaining NaNs
-    X = X.ffill().bfill().fillna(0)
-    
-    # Target creation: 1-step-ahead shift for each sensor
+    # Target creation: 1-step-ahead shift for each dynamic sensor
     targets: Dict[str, pd.Series] = {}
-    for sensor in TARGET_SENSORS:
-        if sensor in df.columns:
-            targets[sensor] = df[sensor].shift(-1)
+    for sensor in target_sensors:
+        col = sensor if sensor in df.columns else next((c for c in df.columns if c.lower() == sensor.lower()), None)
+        if col:
+            targets[sensor] = df[col].shift(-1)
         else:
-            # Fallback if case mismatch
-            matching_col = next((c for c in df.columns if c.lower() == sensor.lower()), None)
-            if matching_col:
-                targets[sensor] = df[matching_col].shift(-1)
-            else:
-                raise ValueError(f"Required target sensor column '{sensor}' missing from dataset")
+            continue
 
     # Drop last row because shift(-1) creates a NaN target at the end
     X_train = X.iloc[:-1].copy()
@@ -119,8 +112,10 @@ def train_machine_models(
     
     models_created = []
     
-    # 1. Train 6 Independent XGBoost Regressor Models
-    for sensor in TARGET_SENSORS:
+    # 1. Train 1 Independent XGBoost Regressor Model per Configured Sensor
+    for sensor in target_sensors:
+        if sensor not in targets or len(targets[sensor].dropna()) == 0:
+            continue
         y_train = targets[sensor].iloc[:-1]
         
         xgb_model = XGBRegressor(
@@ -135,7 +130,6 @@ def train_machine_models(
         
         xgb_model.fit(X_train, y_train)
         
-        # Save XGBoost model to JSON / joblib
         model_filename = f"xgb_{sensor.lower()}.json"
         model_filepath = os.path.join(model_save_dir, model_filename)
         xgb_model.save_model(model_filepath)
@@ -164,14 +158,13 @@ def train_machine_models(
     total_rows = len(df)
     total_hours = float(df["operating_hours"].iloc[-1] - df["operating_hours"].iloc[0]) if "operating_hours" in df.columns and len(df) > 1 else max(1.0, total_rows * (5.0 / 3600.0))
 
-    for sensor in TARGET_SENSORS:
+    for sensor in target_sensors:
         col = sensor if sensor in df.columns else next((c for c in df.columns if c.lower() == sensor.lower()), None)
         if col:
             s_vals = df[col].dropna()
             mean_val = round(float(s_vals.mean()), 2)
             std_val = round(float(s_vals.std()), 3)
 
-            # Linear degradation slope over total operating hours
             if len(s_vals) > 10 and total_hours > 0:
                 first_window_mean = float(s_vals.iloc[:max(5, int(len(s_vals) * 0.1))].mean())
                 last_window_mean = float(s_vals.iloc[-max(5, int(len(s_vals) * 0.1)):].mean())
@@ -195,7 +188,7 @@ def train_machine_models(
         "machine_id": machine_id,
         "model_version": model_version,
         "feature_cols": feature_cols,
-        "target_sensors": TARGET_SENSORS,
+        "target_sensors": target_sensors,
         "sensor_baselines": sensor_baselines,
         "historical_degradation_slopes": historical_degradation_slopes,
         "total_operating_hours": round(total_hours, 2),

@@ -118,6 +118,21 @@ def predict_endpoint(req: PredictRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/apply-maintenance-recovery")
+def apply_maintenance_endpoint(machine_id: str, recovery_points: float = 20.0):
+    try:
+        from inference_engine import apply_maintenance_recovery
+        new_mdi = apply_maintenance_recovery(machine_id, recovery_points)
+        return {
+            "success": True,
+            "machine_id": machine_id,
+            "new_machine_degradation_index": new_mdi,
+            "new_health_score": round(100.0 - new_mdi, 2),
+            "message": f"Maintenance recovery of {recovery_points} points applied successfully."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/clear-cache")
 def clear_cache_endpoint(req: ClearCacheRequest):
     if clear_model_cache:

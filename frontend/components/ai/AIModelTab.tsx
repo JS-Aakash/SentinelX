@@ -58,15 +58,25 @@ const TRAINING_STEPS = [
   'Training Complete & Models Verified!',
 ];
 
-const MODEL_CARDS = [
-  { target: 'Temperature', icon: Thermometer, color: 'border-[#FFB300]/30 text-[#FFB300] bg-[#FFB300]/10', algo: 'XGBRegressor', desc: 'Time-Aware Degradation Trend & RUL Model for Temperature' },
-  { target: 'Vibration', icon: Radio, color: 'border-[#00F2FE]/30 text-[#00F2FE] bg-[#00F2FE]/10', algo: 'XGBRegressor', desc: 'Time-Aware Degradation Trend & RUL Model for Vibration' },
-  { target: 'Current', icon: Zap, color: 'border-[#2979FF]/30 text-[#2979FF] bg-[#2979FF]/10', algo: 'XGBRegressor', desc: 'Time-Aware Degradation Trend & RUL Model for Current' },
-  { target: 'Voltage', icon: Gauge, color: 'border-[#9D4EDD]/30 text-[#9D4EDD] bg-[#9D4EDD]/10', algo: 'XGBRegressor', desc: 'Time-Aware Degradation Trend & RUL Model for Voltage' },
-  { target: 'RPM', icon: Activity, color: 'border-[#00E676]/30 text-[#00E676] bg-[#00E676]/10', algo: 'XGBRegressor', desc: 'Time-Aware Degradation Trend & RUL Model for RPM' },
-  { target: 'Sound', icon: Volume2, color: 'border-[#FF1744]/30 text-[#FF1744] bg-[#FF1744]/10', algo: 'XGBRegressor', desc: 'Time-Aware Degradation Trend & RUL Model for Sound' },
-  { target: 'Anomaly Detector', icon: ShieldCheck, color: 'border-[#3B82F6]/30 text-[#3B82F6] bg-[#3B82F6]/10', algo: 'IsolationForest', desc: 'Detects structural sensor anomalies & out-of-distribution patterns' },
-];
+const SENSOR_ICONS: Record<string, any> = {
+  temperature: Thermometer,
+  vibration: Radio,
+  current: Zap,
+  voltage: Gauge,
+  rpm: Activity,
+  sound: Volume2,
+  default: Cpu,
+};
+
+const SENSOR_COLORS: Record<string, string> = {
+  temperature: 'border-[#FFB300]/30 text-[#FFB300] bg-[#FFB300]/10',
+  vibration: 'border-[#00F2FE]/30 text-[#00F2FE] bg-[#00F2FE]/10',
+  current: 'border-[#2979FF]/30 text-[#2979FF] bg-[#2979FF]/10',
+  voltage: 'border-[#9D4EDD]/30 text-[#9D4EDD] bg-[#9D4EDD]/10',
+  rpm: 'border-[#00E676]/30 text-[#00E676] bg-[#00E676]/10',
+  sound: 'border-[#FF1744]/30 text-[#FF1744] bg-[#FF1744]/10',
+  default: 'border-[#3B82F6]/30 text-[#3B82F6] bg-[#3B82F6]/10',
+};
 
 export function AIModelTab({ machineId }: AIModelTabProps) {
   const [dashboardData, setDashboardData] = useState<AIDashboardResponse | null>(null);
@@ -471,32 +481,58 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {MODEL_CARDS.map((m) => {
-                const Icon = m.icon;
-                return (
-                  <div
-                    key={m.target}
-                    className="rounded-xl border border-[#1B1E2B] bg-[#0B0C12] p-4 relative overflow-hidden group hover:border-[#2E354F] transition-all"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className={cn('w-8 h-8 rounded border flex items-center justify-center', m.color)}>
-                        <Icon size={16} />
+              {(() => {
+                const dynamicTargets = activeModel?.targetSensors && activeModel.targetSensors.length > 0
+                  ? activeModel.targetSensors
+                  : ['Temperature', 'Vibration', 'Current', 'Voltage', 'RPM', 'Sound'];
+
+                const cards = [
+                  ...dynamicTargets.map((t) => {
+                    const key = t.toLowerCase();
+                    return {
+                      target: t,
+                      icon: SENSOR_ICONS[key] || SENSOR_ICONS.default,
+                      color: SENSOR_COLORS[key] || SENSOR_COLORS.default,
+                      algo: 'XGBRegressor',
+                      desc: `Time-Aware Degradation Trend & RUL Model for ${t}`,
+                    };
+                  }),
+                  {
+                    target: 'Anomaly Detector',
+                    icon: ShieldCheck,
+                    color: 'border-[#3B82F6]/30 text-[#3B82F6] bg-[#3B82F6]/10',
+                    algo: 'IsolationForest',
+                    desc: 'Detects structural sensor anomalies & out-of-distribution patterns',
+                  },
+                ];
+
+                return cards.map((m) => {
+                  const Icon = m.icon;
+                  return (
+                    <div
+                      key={m.target}
+                      className="rounded-xl border border-[#1B1E2B] bg-[#0B0C12] p-4 relative overflow-hidden group hover:border-[#2E354F] transition-all"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className={cn('w-8 h-8 rounded border flex items-center justify-center', m.color)}>
+                          <Icon size={16} />
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-[#141724] border border-[#23283E] text-[9px] text-[#00F2FE] font-bold">
+                          {m.algo}
+                        </span>
                       </div>
-                      <span className="px-2 py-0.5 rounded bg-[#141724] border border-[#23283E] text-[9px] text-[#00F2FE] font-bold">
-                        {m.algo}
-                      </span>
-                    </div>
 
-                    <h4 className="text-sm font-bold text-white mb-1 uppercase">{m.target} Model</h4>
-                    <p className="text-[11px] text-[#64748B] leading-relaxed mb-3">{m.desc}</p>
+                      <h4 className="text-sm font-bold text-white mb-1 uppercase">{m.target} Model</h4>
+                      <p className="text-[11px] text-[#64748B] leading-relaxed mb-3">{m.desc}</p>
 
-                    <div className="pt-2 border-t border-[#181B28] flex items-center justify-between text-[10px] text-[#475569]">
-                      <span>Status: <strong className={isTrained ? 'text-[#00E676]' : 'text-[#FFB300]'}>{isTrained ? 'TRAINED' : 'PENDING'}</strong></span>
-                      <span>Target: [t+1]</span>
+                      <div className="pt-2 border-t border-[#181B28] flex items-center justify-between text-[10px] text-[#475569]">
+                        <span>Status: <strong className={isTrained ? 'text-[#00E676]' : 'text-[#FFB300]'}>{isTrained ? 'TRAINED' : 'PENDING'}</strong></span>
+                        <span>Target: [t+1]</span>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           </div>
 

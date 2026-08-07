@@ -305,12 +305,12 @@ export class SimulationService {
    */
   private static getInitialValuesForProfile(profile: SimulationProfile, overrides: ISensorOverride) {
     let base = {
-      temperature: 42.5,
-      vibration: 0.14,
-      current: 3.4,
-      voltage: 230.0,
-      rpm: 1485,
-      sound: 62.0,
+      temperature: 83.0,
+      vibration: 18.3,
+      current: 74.0,
+      voltage: 401.0,
+      rpm: 1390,
+      sound: 75.5,
     };
 
     if (profile === 'bearing_failure') {
@@ -344,12 +344,12 @@ export class SimulationService {
     let { temperature, vibration, current, voltage, rpm, sound } = currentValues;
 
     if (profile === 'normal_operation') {
-      temperature = Math.min(65, temperature + (0.05 * mult) + noise(0.2));
-      vibration = Math.max(0.05, 0.14 + noise(0.02));
-      current = Math.max(1.0, 3.4 + noise(0.1));
-      voltage = Math.max(210, Math.min(240, 230.0 + noise(0.8)));
-      rpm = Math.max(1200, Math.min(1600, 1485 + noise(5)));
-      sound = Math.max(50, 62.0 + noise(0.5));
+      temperature = Math.min(100, Math.max(40, 83.0 + noise(0.5)));
+      vibration = Math.max(0.1, 18.3 + noise(0.2));
+      current = Math.max(1.0, 74.0 + noise(0.8));
+      voltage = Math.max(360, Math.min(440, 401.0 + noise(1.2)));
+      rpm = Math.max(1200, Math.min(1600, 1390 + noise(5)));
+      sound = Math.max(50, 75.5 + noise(0.4));
     } else if (profile === 'bearing_failure') {
       // Rapid temp & vibration rise, sound increase, rpm decrease
       temperature = Math.min(105, temperature + (0.6 * mult) + noise(0.2));

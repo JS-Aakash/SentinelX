@@ -10,6 +10,7 @@ import {
   getMachineTypes,
   getFilterOptions,
   getMachineById,
+  getMachineConfig,
   createMachine,
   updateMachine,
   deleteMachine,
@@ -55,6 +56,7 @@ router.get('/stats', getMachineStats);
 router.get('/recent', getRecentMachines);
 router.get('/types', getMachineTypes);
 router.get('/filter-options', getFilterOptions);
+router.get('/:id/config', validate(machineIdParamSchema), getMachineConfig);
 router.get('/:id/live', validate(machineIdParamSchema), getMachineLiveTelemetry);
 router.get('/:id/history', validate(machineIdParamSchema), getMachineTelemetryHistory);
 router.get('/:id/chart', validate(machineIdParamSchema), getChartData);

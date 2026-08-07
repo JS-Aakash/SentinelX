@@ -72,7 +72,30 @@ const STATUS_OPTIONS: { value: MachineStatus; label: string }[] = [
   { value: 'fault', label: 'Fault' },
 ];
 
-const SECTIONS = ['Basic Info', 'Specs', 'Operating Limits', 'Location', 'Media & Tags'] as const;
+const SECTIONS = ['Basic Info', 'Specs', 'Operating Limits', 'Sensor Configuration', 'Location', 'Media & Tags'] as const;
+
+export interface SensorFormItem {
+  sensorKey: string;
+  type: string;
+  displayName: string;
+  unit: string;
+  order: number;
+  enabled: boolean;
+  minLimit?: number;
+  ratedValue?: number;
+  maxLimit?: number;
+  weight?: number;
+  criticality?: 'Low' | 'Medium' | 'High' | 'Critical';
+}
+
+const DEFAULT_SENSORS_FORM: SensorFormItem[] = [
+  { sensorKey: 'temperature', type: 'Temperature', displayName: 'Temperature', unit: '°C', order: 1, enabled: true, minLimit: 0, ratedValue: 45, maxLimit: 80, weight: 20, criticality: 'High' },
+  { sensorKey: 'vibration', type: 'Vibration', displayName: 'Vibration', unit: 'g', order: 2, enabled: true, minLimit: 0, ratedValue: 0.15, maxLimit: 2.5, weight: 20, criticality: 'Critical' },
+  { sensorKey: 'current', type: 'Current', displayName: 'Current', unit: 'A', order: 3, enabled: true, minLimit: 0, ratedValue: 3.0, maxLimit: 15, weight: 20, criticality: 'High' },
+  { sensorKey: 'voltage', type: 'Voltage', displayName: 'Voltage', unit: 'V', order: 4, enabled: true, minLimit: 180, ratedValue: 230, maxLimit: 260, weight: 15, criticality: 'Medium' },
+  { sensorKey: 'rpm', type: 'RPM', displayName: 'RPM', unit: 'RPM', order: 5, enabled: true, minLimit: 1000, ratedValue: 1500, maxLimit: 3000, weight: 15, criticality: 'Medium' },
+  { sensorKey: 'sound', type: 'Sound', displayName: 'Sound Level', unit: 'dB', order: 6, enabled: true, minLimit: 0, ratedValue: 60, maxLimit: 85, weight: 10, criticality: 'Low' },
+];
 
 export default function NewMachineClient() {
   const router = useRouter();
@@ -85,6 +108,7 @@ export default function NewMachineClient() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [machineTypes, setMachineTypes] = useState<string[]>(PREDEFINED_TYPES);
+  const [sensors, setSensors] = useState<SensorFormItem[]>(DEFAULT_SENSORS_FORM);
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -119,13 +143,43 @@ export default function NewMachineClient() {
     setTags((prev) => prev.filter((t) => t !== tag));
   }, []);
 
+  const addSensorItem = useCallback(() => {
+    const idNum = sensors.length + 1;
+    const newSensor: SensorFormItem = {
+      sensorKey: `custom_sensor_${idNum}`,
+      type: 'Custom',
+      displayName: `Custom Sensor ${idNum}`,
+      unit: '%',
+      order: idNum,
+      enabled: true,
+      minLimit: 0,
+      ratedValue: 50,
+      maxLimit: 100,
+      weight: 0,
+      criticality: 'Medium',
+    };
+    setSensors((prev) => [...prev, newSensor]);
+  }, [sensors.length]);
+
+  const removeSensorItem = useCallback((index: number) => {
+    setSensors((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const updateSensorItem = useCallback((index: number, field: keyof SensorFormItem, value: any) => {
+    setSensors((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  }, []);
+
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
     setSubmitError(null);
 
     const machineType = data.type === 'Custom' && data.customType ? data.customType : data.type;
 
-    const payload: CreateMachinePayload = {
+    const payload: any = {
       machineCode: data.machineCode,
       name: data.name,
       type: machineType,
@@ -133,9 +187,9 @@ export default function NewMachineClient() {
       modelNumber: data.modelNumber || undefined,
       serialNumber: data.serialNumber || undefined,
       manufacturingYear: data.manufacturingYear ? Number(data.manufacturingYear) : undefined,
-      installationDate: data.installationDate || undefined,
-      commissioningDate: data.commissioningDate || undefined,
-      lastMaintenanceDate: data.lastMaintenanceDate || undefined,
+      installationDate: data.installationDate ? new Date(data.installationDate) : undefined,
+      commissioningDate: data.commissioningDate ? new Date(data.commissioningDate) : undefined,
+      lastMaintenanceDate: data.lastMaintenanceDate ? new Date(data.lastMaintenanceDate) : undefined,
       plant: data.plant || undefined,
       department: data.department || undefined,
       location: data.location || undefined,
@@ -154,6 +208,7 @@ export default function NewMachineClient() {
         failureVibration: data.failureVibration ? Number(data.failureVibration) : undefined,
         failureCurrent: data.failureCurrent ? Number(data.failureCurrent) : undefined,
       },
+      sensors,
       description: data.description || undefined,
       tags,
     };
@@ -165,7 +220,7 @@ export default function NewMachineClient() {
       return;
     }
 
-    const createdMachineId = result.machine?._id || result.machine?.id;
+    const createdMachineId = result.machine?._id ? String(result.machine._id) : (result.machine?.id ? String(result.machine.id) : '');
 
     // Upload image if selected
     if (imageFile && createdMachineId) {
@@ -377,8 +432,142 @@ export default function NewMachineClient() {
           </div>
         )}
 
-        {/* ─── Section 4: Location ───────────────────────────────────────── */}
+        {/* ─── Section 4: Sensor Configuration ──────────────────────────── */}
         {activeSection === 3 && (
+          <div className="glass rounded-xl p-6 space-y-5 animate-fade-in">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold text-white">Sensor Configuration</h2>
+                <p className="text-xs text-[oklch(0.50_0.01_240)] mt-0.5">Define installed sensors, types, units, thresholds, and importance weights.</p>
+              </div>
+              <button
+                type="button"
+                onClick={addSensorItem}
+                className="px-3 py-1.5 rounded-lg bg-[oklch(0.52_0.24_240/0.2)] border border-[oklch(0.52_0.24_240/0.4)] text-[oklch(0.65_0.20_240)] hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all"
+              >
+                <Plus size={14} /> Add Sensor
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {sensors.map((sensor, idx) => (
+                <div key={idx} className="p-4 rounded-xl border border-[oklch(0.20_0.01_240)] bg-[oklch(0.10_0.005_240)] space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={sensor.enabled}
+                        onChange={(e) => updateSensorItem(idx, 'enabled', e.target.checked)}
+                        className="rounded border-[oklch(0.30_0.01_240)] accent-[oklch(0.52_0.24_240)] w-4 h-4"
+                      />
+                      <input
+                        type="text"
+                        value={sensor.displayName}
+                        onChange={(e) => updateSensorItem(idx, 'displayName', e.target.value)}
+                        placeholder="Sensor Display Name"
+                        className="bg-[oklch(0.14_0.007_240)] border border-[oklch(0.22_0.01_240)] rounded text-xs text-white px-2.5 py-1 font-semibold"
+                      />
+                      <span className="text-[10px] text-[oklch(0.50_0.01_240)] font-mono">#{idx + 1}</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => removeSensorItem(idx)}
+                      className="p-1 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 pt-1">
+                    <div>
+                      <label className="text-[10px] text-[oklch(0.50_0.01_240)] block mb-1">Type</label>
+                      <select
+                        value={sensor.type}
+                        onChange={(e) => updateSensorItem(idx, 'type', e.target.value)}
+                        className="w-full bg-[oklch(0.14_0.007_240)] border border-[oklch(0.22_0.01_240)] rounded text-xs text-white px-2 py-1"
+                      >
+                        {['Temperature', 'Vibration', 'Current', 'Voltage', 'RPM', 'Sound', 'Pressure', 'Flow', 'Oil Level', 'Humidity', 'Custom'].map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-[oklch(0.50_0.01_240)] block mb-1">Unit</label>
+                      <input
+                        type="text"
+                        value={sensor.unit}
+                        onChange={(e) => updateSensorItem(idx, 'unit', e.target.value)}
+                        placeholder="e.g. °C, bar, g"
+                        className="w-full bg-[oklch(0.14_0.007_240)] border border-[oklch(0.22_0.01_240)] rounded text-xs text-white px-2 py-1"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-[oklch(0.50_0.01_240)] block mb-1">Rated Value</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={sensor.ratedValue ?? ''}
+                        onChange={(e) => updateSensorItem(idx, 'ratedValue', e.target.value ? Number(e.target.value) : undefined)}
+                        placeholder="45"
+                        className="w-full bg-[oklch(0.14_0.007_240)] border border-[oklch(0.22_0.01_240)] rounded text-xs text-white px-2 py-1"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-[oklch(0.50_0.01_240)] block mb-1">Max Limit</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={sensor.maxLimit ?? ''}
+                        onChange={(e) => updateSensorItem(idx, 'maxLimit', e.target.value ? Number(e.target.value) : undefined)}
+                        placeholder="80"
+                        className="w-full bg-[oklch(0.14_0.007_240)] border border-[oklch(0.22_0.01_240)] rounded text-xs text-white px-2 py-1"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-[oklch(0.50_0.01_240)] block mb-1">Weight (%)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={sensor.weight ?? ''}
+                        onChange={(e) => updateSensorItem(idx, 'weight', e.target.value ? Number(e.target.value) : 0)}
+                        placeholder="20"
+                        className="w-full bg-[oklch(0.14_0.007_240)] border border-[oklch(0.22_0.01_240)] rounded text-xs text-white px-2 py-1"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-[oklch(0.50_0.01_240)] block mb-1">Criticality</label>
+                      <select
+                        value={sensor.criticality || 'Medium'}
+                        onChange={(e) => updateSensorItem(idx, 'criticality', e.target.value)}
+                        className="w-full bg-[oklch(0.14_0.007_240)] border border-[oklch(0.22_0.01_240)] rounded text-xs text-white px-2 py-1"
+                      >
+                        {['Low', 'Medium', 'High', 'Critical'].map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between p-3 rounded-lg border border-[oklch(0.20_0.01_240)] bg-[oklch(0.12_0.006_240)] text-xs">
+              <span className="text-[oklch(0.55_0.01_240)]">Total Dynamic Sensor Weight Sum:</span>
+              <span className={cn('font-bold font-mono', sensors.filter(s => s.enabled).reduce((a, b) => a + (b.weight || 0), 0) === 100 ? 'text-emerald-400' : 'text-amber-400')}>
+                {sensors.filter(s => s.enabled).reduce((a, b) => a + (b.weight || 0), 0)}%
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Section 5: Location ───────────────────────────────────────── */}
+        {activeSection === 4 && (
           <div className="glass rounded-xl p-6 space-y-5 animate-fade-in">
             <h2 className="text-sm font-semibold text-white">Location & Placement</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -398,8 +587,8 @@ export default function NewMachineClient() {
           </div>
         )}
 
-        {/* ─── Section 5: Media & Tags ──────────────────────────────────── */}
-        {activeSection === 4 && (
+        {/* ─── Section 6: Media & Tags ──────────────────────────────────── */}
+        {activeSection === 5 && (
           <div className="glass rounded-xl p-6 space-y-5 animate-fade-in">
             <h2 className="text-sm font-semibold text-white">Image & Tags</h2>
 

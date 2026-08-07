@@ -101,7 +101,7 @@ export class IngestionService {
     az = Number(az.toFixed(2));
 
     let computedVibration = payload.vibration;
-    if (computedVibration === undefined || computedVibration === null || isNaN(computedVibration) || computedVibration > 10.0) {
+    if (computedVibration === undefined || computedVibration === null || isNaN(computedVibration)) {
       const totalMag = Math.sqrt(ax * ax + ay * ay + az * az);
       // Subtract 1.0g static Earth gravity vector to isolate dynamic machine vibration
       const dynamicVib = Math.abs(totalMag - 1.0);

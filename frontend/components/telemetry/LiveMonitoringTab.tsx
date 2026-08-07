@@ -186,84 +186,60 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
     return { status: 'Normal', isWarning: false };
   };
 
-  const metricCards = [
-    {
-      id: 'temperature',
-      title: 'Temperature (DHT22)',
-      dataKey: 'temperature',
-      colorHex: '#F59E0B',
-      value: isOnline && telemetry?.temperature != null ? `${telemetry.temperature.toFixed(1)}` : '—',
-      unit: '°C',
-      icon: Thermometer,
-      color: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-      limitInfo: operatingLimits?.maxTemperature ? `Max Limit: ${operatingLimits.maxTemperature}°C` : null,
-      sensorCheck: getSensorStatus(isOnline && telemetry?.temperature != null ? telemetry.temperature : null, operatingLimits?.maxTemperature),
-    },
-    {
-      id: 'current',
-      title: 'Current (Kalman ACS712)',
-      dataKey: 'current',
-      colorHex: '#3B82F6',
-      value: isOnline && telemetry?.current != null ? `${telemetry.current.toFixed(2)}` : '—',
-      unit: 'A',
-      icon: Zap,
-      color: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-      limitInfo: operatingLimits?.maxCurrent ? `Max Limit: ${operatingLimits.maxCurrent}A` : null,
-      sensorCheck: getSensorStatus(isOnline && telemetry?.current != null ? telemetry.current : null, operatingLimits?.maxCurrent),
-    },
-    {
-      id: 'voltage',
-      title: 'Voltage',
-      dataKey: 'voltage',
-      colorHex: '#A855F7',
-      value: isOnline && telemetry?.voltage != null ? `${telemetry.voltage.toFixed(1)}` : '—',
-      unit: 'V',
-      icon: Gauge,
-      color: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-      limitInfo: 'Rated: 220V - 240V',
-      sensorCheck: getSensorStatus(isOnline && telemetry?.voltage != null ? telemetry.voltage : null),
-    },
-    {
-      id: 'rpm',
-      title: 'Rotational Speed (RPM)',
-      dataKey: 'rpm',
-      colorHex: '#10B981',
-      value: isOnline && telemetry?.rpm != null ? `${Math.round(telemetry.rpm)}` : '—',
-      unit: 'RPM',
-      icon: Activity,
-      color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-      limitInfo: operatingLimits?.minRPM ? `Min Limit: ${operatingLimits.minRPM} RPM` : null,
-      sensorCheck: getSensorStatus(isOnline && telemetry?.rpm != null ? telemetry.rpm : null, operatingLimits?.minRPM, true),
-    },
-    {
-      id: 'vibration',
-      title: 'Vibration (ADXL345 3-Axis)',
-      dataKey: 'vibration',
-      colorHex: '#06B6D4',
-      value: isOnline && telemetry?.vibration != null ? `${telemetry.vibration.toFixed(2)}` : '—',
-      unit: 'g',
-      icon: Radio,
-      color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-      limitInfo: isOnline && telemetry?.acceleration
-        ? `X: ${telemetry.acceleration.x}g | Y: ${telemetry.acceleration.y}g | Z: ${telemetry.acceleration.z}g`
-        : operatingLimits?.maxVibration
-        ? `Max Limit: ${operatingLimits.maxVibration} g`
-        : 'X: 0.00g | Y: 0.00g | Z: 0.00g',
-      sensorCheck: getSensorStatus(isOnline && telemetry?.vibration != null ? telemetry.vibration : null, operatingLimits?.maxVibration),
-    },
-    {
-      id: 'sound',
-      title: 'Sound Level',
-      dataKey: 'sound',
-      colorHex: '#F43F5E',
-      value: isOnline && telemetry?.sound != null ? `${telemetry.sound.toFixed(1)}` : '—',
-      unit: 'dB / ADC',
-      icon: Volume2,
-      color: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-      limitInfo: (operatingLimits as any)?.maxSound ? `Max Limit: ${(operatingLimits as any).maxSound} dB` : null,
-      sensorCheck: getSensorStatus(isOnline && telemetry?.sound != null ? telemetry.sound : null, (operatingLimits as any)?.maxSound),
-    },
-  ];
+  const SENSOR_ICONS_MAP: Record<string, any> = {
+    temperature: Thermometer,
+    vibration: Radio,
+    current: Zap,
+    voltage: Gauge,
+    rpm: Activity,
+    sound: Volume2,
+    default: Cpu,
+  };
+
+  const SENSOR_COLORS_MAP: Record<string, { color: string; hex: string }> = {
+    temperature: { color: 'bg-amber-500/10 text-amber-400 border-amber-500/20', hex: '#F59E0B' },
+    vibration: { color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20', hex: '#06B6D4' },
+    current: { color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20', hex: '#6366F1' },
+    voltage: { color: 'bg-purple-500/10 text-purple-400 border-purple-500/20', hex: '#A855F7' },
+    rpm: { color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', hex: '#10B981' },
+    sound: { color: 'bg-rose-500/10 text-rose-400 border-rose-500/20', hex: '#F43F5E' },
+    default: { color: 'bg-blue-500/10 text-blue-400 border-blue-500/20', hex: '#3B82F6' },
+  };
+
+  const dynamicSensorsList = (operatingLimits as any)?.sensors && (operatingLimits as any).sensors.length > 0
+    ? (operatingLimits as any).sensors.filter((s: any) => s.enabled)
+    : [
+        { sensorKey: 'temperature', displayName: 'Temperature', unit: '°C', maxLimit: operatingLimits?.maxTemperature || 80 },
+        { sensorKey: 'vibration', displayName: 'Vibration', unit: 'g / RMS', maxLimit: operatingLimits?.maxVibration || 2.5 },
+        { sensorKey: 'current', displayName: 'Current', unit: 'A (Amps)', maxLimit: operatingLimits?.maxCurrent || 15 },
+        { sensorKey: 'voltage', displayName: 'Voltage', unit: 'V (AC)', maxLimit: undefined },
+        { sensorKey: 'rpm', displayName: 'RPM', unit: 'RPM', maxLimit: undefined },
+        { sensorKey: 'sound', displayName: 'Sound Level', unit: 'dB / ADC', maxLimit: (operatingLimits as any)?.maxSound },
+      ];
+
+  const metricCards = dynamicSensorsList.map((s: any) => {
+    const key = (s.sensorKey || s.displayName).toLowerCase();
+    const icon = SENSOR_ICONS_MAP[key] || SENSOR_ICONS_MAP.default;
+    const style = SENSOR_COLORS_MAP[key] || SENSOR_COLORS_MAP.default;
+    const rawVal = telemetry ? (telemetry as any)[key] ?? (telemetry as any)[s.sensorKey] ?? (telemetry as any)[s.displayName] : null;
+    const isVib = key.includes('vib') || key.includes('vibration') || (s.unit && s.unit.toLowerCase().includes('g'));
+    const valFormatted = isOnline && rawVal != null
+      ? (isVib || (Number(rawVal) > 0 && Number(rawVal) < 5) ? Number(rawVal).toFixed(2) : Number(rawVal).toFixed(1))
+      : '—';
+
+    return {
+      id: s.sensorKey || key,
+      title: s.displayName || s.sensorKey,
+      dataKey: key,
+      colorHex: style.hex,
+      value: valFormatted,
+      unit: s.unit || '',
+      icon,
+      color: style.color,
+      limitInfo: s.maxLimit ? `Max Limit: ${s.maxLimit} ${s.unit || ''}` : null,
+      sensorCheck: getSensorStatus(isOnline && rawVal != null ? Number(rawVal) : null, s.maxLimit),
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -326,7 +302,7 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
 
       {/* Live Telemetry Individual Graphs Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {metricCards.map((card) => {
+        {metricCards.map((card: any) => {
           const Icon = card.icon;
           const { status, isWarning } = card.sensorCheck;
 

@@ -52,12 +52,12 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
     rpm: number;
     sound: number;
   }>({
-    temperature: 42.5,
-    vibration: 0.14,
-    current: 3.4,
-    voltage: 230.0,
-    rpm: 1485,
-    sound: 62.0,
+    temperature: 83.0,
+    vibration: 18.3,
+    current: 74.0,
+    voltage: 401.0,
+    rpm: 1390,
+    sound: 75.5,
   });
 
   // Auto-select first machine if none selected
@@ -80,12 +80,12 @@ export const SimulationControlPanel: React.FC<Props> = ({ initialMachineId }) =>
     const now = Date.now();
     return Array.from({ length: 10 }).map((_, i) => ({
       time: new Date(now - (10 - i) * 2000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      temperature: 42.0,
-      vibration: 0.14,
-      current: 3.4,
-      voltage: 230.0,
-      rpm: 1480,
-      sound: 58.0,
+      temperature: 83.0,
+      vibration: 18.3,
+      current: 74.0,
+      voltage: 401.0,
+      rpm: 1390,
+      sound: 75.5,
     }));
   });
 

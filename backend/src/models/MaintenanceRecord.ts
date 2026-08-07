@@ -17,6 +17,7 @@ export interface IMaintenanceRecord extends Document {
   activityType: MaintenanceActivityType;
   title: string;
   description: string;
+  componentRepaired: string;
   engineerId: mongoose.Types.ObjectId;
   engineerName: string;
   cost: number;
@@ -24,6 +25,11 @@ export interface IMaintenanceRecord extends Document {
   downtimeHours: number;
   healthScoreBefore: number;
   healthScoreAfter: number;
+  expectedRecovery: number;
+  actualRecovery: number;
+  effectiveness: number;
+  status: 'Successful' | 'Partially Successful' | 'Ineffective';
+  observationPeriodHours: number;
   partsReplaced: string[];
   ipfsCid: string;
   blockchainTxHash: string;
@@ -68,6 +74,10 @@ const MaintenanceRecordSchema = new Schema<IMaintenanceRecord>(
       type: String,
       required: true,
     },
+    componentRepaired: {
+      type: String,
+      default: 'General Machine System',
+    },
     engineerId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -95,7 +105,28 @@ const MaintenanceRecordSchema = new Schema<IMaintenanceRecord>(
     },
     healthScoreAfter: {
       type: Number,
-      default: 95,
+      default: 90,
+    },
+    expectedRecovery: {
+      type: Number,
+      default: 20,
+    },
+    actualRecovery: {
+      type: Number,
+      default: 18,
+    },
+    effectiveness: {
+      type: Number,
+      default: 90,
+    },
+    status: {
+      type: String,
+      enum: ['Successful', 'Partially Successful', 'Ineffective'],
+      default: 'Successful',
+    },
+    observationPeriodHours: {
+      type: Number,
+      default: 24,
     },
     partsReplaced: [{ type: String }],
     ipfsCid: {

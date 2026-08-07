@@ -68,6 +68,70 @@ export interface IDigitalTwin {
   version: number;
 }
 
+export interface ISensorConfig {
+  sensorKey: string;
+  type: string;
+  displayName: string;
+  unit: string;
+  order: number;
+  enabled: boolean;
+  minLimit?: number;
+  ratedValue?: number;
+  maxLimit?: number;
+  weight?: number;
+  criticality?: 'Low' | 'Medium' | 'High' | 'Critical';
+}
+
+export const DEFAULT_SENSOR_CONFIGS: ISensorConfig[] = [
+  { sensorKey: 'temperature', type: 'Temperature', displayName: 'Temperature', unit: '°C', order: 1, enabled: true, minLimit: 0, ratedValue: 45, maxLimit: 80, weight: 20, criticality: 'High' },
+  { sensorKey: 'vibration', type: 'Vibration', displayName: 'Vibration', unit: 'g', order: 2, enabled: true, minLimit: 0, ratedValue: 0.15, maxLimit: 2.5, weight: 20, criticality: 'Critical' },
+  { sensorKey: 'current', type: 'Current', displayName: 'Current', unit: 'A', order: 3, enabled: true, minLimit: 0, ratedValue: 3.0, maxLimit: 15, weight: 20, criticality: 'High' },
+  { sensorKey: 'voltage', type: 'Voltage', displayName: 'Voltage', unit: 'V', order: 4, enabled: true, minLimit: 180, ratedValue: 230, maxLimit: 260, weight: 15, criticality: 'Medium' },
+  { sensorKey: 'rpm', type: 'RPM', displayName: 'RPM', unit: 'RPM', order: 5, enabled: true, minLimit: 1000, ratedValue: 1500, maxLimit: 3000, weight: 15, criticality: 'Medium' },
+  { sensorKey: 'sound', type: 'Sound', displayName: 'Sound Level', unit: 'dB', order: 6, enabled: true, minLimit: 0, ratedValue: 60, maxLimit: 85, weight: 10, criticality: 'Low' },
+];
+
+export interface ISensorImportance {
+  sensorKey: string;
+  sensorName: string;
+  weight: number;
+  criticality: 'Low' | 'Medium' | 'High' | 'Critical';
+  enabled: boolean;
+}
+
+export const SENSOR_IMPORTANCE_PRESETS: Record<string, ISensorImportance[]> = {
+  Default: [
+    { sensorKey: 'temperature', sensorName: 'Temperature', weight: 20, criticality: 'High', enabled: true },
+    { sensorKey: 'vibration', sensorName: 'Vibration', weight: 20, criticality: 'Critical', enabled: true },
+    { sensorKey: 'current', sensorName: 'Current', weight: 20, criticality: 'High', enabled: true },
+    { sensorKey: 'voltage', sensorName: 'Voltage', weight: 15, criticality: 'Medium', enabled: true },
+    { sensorKey: 'rpm', sensorName: 'RPM', weight: 15, criticality: 'Medium', enabled: true },
+    { sensorKey: 'sound', sensorName: 'Sound Level', weight: 10, criticality: 'Low', enabled: true },
+  ],
+  Generator: [
+    { sensorKey: 'temperature', sensorName: 'Temperature', weight: 25, criticality: 'High', enabled: true },
+    { sensorKey: 'current', sensorName: 'Current', weight: 30, criticality: 'Critical', enabled: true },
+    { sensorKey: 'voltage', sensorName: 'Voltage', weight: 15, criticality: 'High', enabled: true },
+    { sensorKey: 'rpm', sensorName: 'RPM', weight: 15, criticality: 'Medium', enabled: true },
+    { sensorKey: 'vibration', sensorName: 'Vibration', weight: 10, criticality: 'Medium', enabled: true },
+    { sensorKey: 'sound', sensorName: 'Sound Level', weight: 5, criticality: 'Low', enabled: true },
+  ],
+  Pump: [
+    { sensorKey: 'vibration', sensorName: 'Vibration', weight: 35, criticality: 'Critical', enabled: true },
+    { sensorKey: 'current', sensorName: 'Current', weight: 25, criticality: 'High', enabled: true },
+    { sensorKey: 'temperature', sensorName: 'Temperature', weight: 20, criticality: 'High', enabled: true },
+    { sensorKey: 'rpm', sensorName: 'RPM', weight: 10, criticality: 'Medium', enabled: true },
+    { sensorKey: 'sound', sensorName: 'Sound Level', weight: 10, criticality: 'Low', enabled: true },
+  ],
+  Compressor: [
+    { sensorKey: 'temperature', sensorName: 'Temperature', weight: 30, criticality: 'Critical', enabled: true },
+    { sensorKey: 'vibration', sensorName: 'Vibration', weight: 25, criticality: 'Critical', enabled: true },
+    { sensorKey: 'current', sensorName: 'Current', weight: 20, criticality: 'High', enabled: true },
+    { sensorKey: 'rpm', sensorName: 'RPM', weight: 15, criticality: 'Medium', enabled: true },
+    { sensorKey: 'sound', sensorName: 'Sound Level', weight: 10, criticality: 'Low', enabled: true },
+  ],
+};
+
 export interface IMachine extends Document {
   _id: mongoose.Types.ObjectId;
   uuid: string;
@@ -100,6 +164,8 @@ export interface IMachine extends Document {
   ratedSound?: number;
   ratedVibration?: number;
   operatingLimits?: IOperatingLimits;
+  sensorImportance?: ISensorImportance[];
+  sensors?: ISensorConfig[];
   description?: string;
   image?: string;
   tags: string[];
@@ -292,6 +358,30 @@ const MachineSchema = new Schema<IMachine>(
       type: OperatingLimitsSchema,
       default: {},
     },
+    sensorImportance: [
+      {
+        sensorKey: { type: String, required: true },
+        sensorName: { type: String, required: true },
+        weight: { type: Number, required: true },
+        criticality: { type: String, enum: ['Low', 'Medium', 'High', 'Critical'], default: 'Medium' },
+        enabled: { type: Boolean, default: true },
+      },
+    ],
+    sensors: [
+      {
+        sensorKey: { type: String, required: true },
+        type: { type: String, required: true },
+        displayName: { type: String, required: true },
+        unit: { type: String, required: true },
+        order: { type: Number, default: 1 },
+        enabled: { type: Boolean, default: true },
+        minLimit: { type: Number },
+        ratedValue: { type: Number },
+        maxLimit: { type: Number },
+        weight: { type: Number },
+        criticality: { type: String, enum: ['Low', 'Medium', 'High', 'Critical'], default: 'Medium' },
+      },
+    ],
     description: {
       type: String,
       trim: true,

@@ -20,12 +20,15 @@ export class MachineService {
       );
     }
 
+    const { DEFAULT_SENSOR_CONFIGS } = await import('../models/Machine');
+
     const machineData: Partial<IMachine> = {
       ...data,
       machineCode: data.machineCode.toUpperCase(),
       companyId: new mongoose.Types.ObjectId(companyId),
       createdBy: new mongoose.Types.ObjectId(userId),
       installationDate: data.installationDate ? new Date(data.installationDate) : undefined,
+      sensors: (data as any).sensors && (data as any).sensors.length > 0 ? (data as any).sensors : DEFAULT_SENSOR_CONFIGS,
     };
 
     return machineRepository.create(machineData);
@@ -48,6 +51,12 @@ export class MachineService {
     if (!machine) {
       throw ApiError.notFound('Machine not found');
     }
+
+    if (!machine.sensors || machine.sensors.length === 0) {
+      const { DEFAULT_SENSOR_CONFIGS } = await import('../models/Machine');
+      machine.sensors = DEFAULT_SENSOR_CONFIGS;
+    }
+
     return machine;
   }
 

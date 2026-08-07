@@ -58,22 +58,27 @@ def load_or_get_cached_models(machine_id: str, version: int, model_dir: str) -> 
     # Load metadata
     meta_path = os.path.join(version_dir, "metadata.json")
     feature_cols = []
+    target_sensors = ["Temperature", "Vibration", "Current", "Voltage", "RPM", "Sound"]
+    sensor_baselines: Dict[str, Dict[str, float]] = {}
+    historical_degradation_slopes: Dict[str, float] = {}
+
     if os.path.exists(meta_path):
         with open(meta_path, "r") as f:
             meta = json.load(f)
             feature_cols = meta.get("feature_cols", [])
+            target_sensors = meta.get("target_sensors", target_sensors)
+            sensor_baselines = meta.get("sensor_baselines", {})
+            historical_degradation_slopes = meta.get("historical_degradation_slopes", {})
 
-    # Load 6 XGBoost Models
+    # Load dynamic XGBoost Models for all configured target sensors
     xgb_models: Dict[str, XGBRegressor] = {}
-    for sensor in TARGET_SENSORS:
+    for sensor in target_sensors:
         fname = f"xgb_{sensor.lower()}.json"
         fpath = os.path.join(version_dir, fname)
         if os.path.exists(fpath):
             model = XGBRegressor()
             model.load_model(fpath)
             xgb_models[sensor] = model
-        else:
-            raise FileNotFoundError(f"Missing required XGBoost model file for sensor {sensor}: {fname}")
 
     # Load Isolation Forest
     iso_path = os.path.join(version_dir, "isolation_forest.joblib")
@@ -105,6 +110,29 @@ def load_or_get_cached_models(machine_id: str, version: int, model_dir: str) -> 
     MODEL_CACHE[cache_key] = cache_entry
     return cache_entry
 
+# In-Memory Machine Degradation Index (MDI) & Health Memory Cache per machine
+# Key: machine_id -> float (stored MDI memory)
+MDI_MEMORY_CACHE: Dict[str, float] = {}
+
+def get_machine_mdi_memory(machine_id: str, default_mdi: float) -> float:
+    global MDI_MEMORY_CACHE
+    if machine_id not in MDI_MEMORY_CACHE:
+        MDI_MEMORY_CACHE[machine_id] = default_mdi
+    return MDI_MEMORY_CACHE[machine_id]
+
+def update_machine_mdi_memory(machine_id: str, new_mdi: float) -> float:
+    global MDI_MEMORY_CACHE
+    MDI_MEMORY_CACHE[machine_id] = new_mdi
+    return new_mdi
+
+def apply_maintenance_recovery(machine_id: str, recovery_points: float = 20.0) -> float:
+    """Apply maintenance recovery factor to improve machine health score."""
+    global MDI_MEMORY_CACHE
+    curr_mdi = MDI_MEMORY_CACHE.get(machine_id, 20.0)
+    recovered_mdi = max(0.0, curr_mdi - recovery_points)
+    MDI_MEMORY_CACHE[machine_id] = recovered_mdi
+    return recovered_mdi
+
 def run_live_inference_and_forecast(
     machine_id: str,
     version: int,
@@ -116,8 +144,13 @@ def run_live_inference_and_forecast(
     sampling_interval_seconds: float = 5.0
 ) -> Dict[str, Any]:
     """
-    Execute live prediction, time-aware forecasting, 
-    Isolation Forest continuous anomaly scoring, and automated Root Cause Analysis.
+    SentinelX Machine Lifecycle & Degradation Engine:
+    
+    Architecture:
+    Machine Lifecycle + Historical Degradation + Current Condition
+    -> Machine Degradation Index (MDI: 0=New, 100=End of Life)
+    -> Health Score (100 - MDI)
+    -> Hybrid Lifecycle RSOT (Remaining Safe Operating Time)
     """
     t0 = time.time()
     
@@ -128,7 +161,6 @@ def run_live_inference_and_forecast(
     feature_cols: List[str] = cached["feature_cols"]
     sensor_baselines: Dict[str, Dict[str, float]] = cached.get("sensor_baselines", {})
 
-    # Default fallback baselines if machine hasn't learned historical baseline yet
     default_baselines = {
         "Temperature": {"expected": 45.0, "unit": "°C"},
         "Vibration": {"expected": 0.12, "unit": "g"},
@@ -138,14 +170,12 @@ def run_live_inference_and_forecast(
         "Sound": {"expected": 62.0, "unit": "dB"},
     }
 
-    # 2. Update sequence buffer & construct time-aware feature vector
+    # 2. Update sliding sequence buffer
     buffer = update_sequence_buffer(machine_id, current_reading)
-
-    # Build dynamic feature map combining current reading, lags, rolling statistics, and derivatives
-    feat_map = {k: float(v) for k, v in feature_vector.items()}
-    
-    # Overwrite/fill missing time-aware features from sliding sequence buffer
     buf_df = pd.DataFrame(buffer)
+
+    # Construct time-aware feature map
+    feat_map = {k: float(v) for k, v in feature_vector.items()}
     for s in TARGET_SENSORS:
         col = s if s in buf_df.columns else next((c for c in buf_df.columns if c.lower() == s.lower()), None)
         if col:
@@ -167,15 +197,13 @@ def run_live_inference_and_forecast(
     x_input = [float(feat_map.get(c, 0.0)) for c in feature_cols]
     df_curr = pd.DataFrame([x_input], columns=feature_cols)
 
-    # 3. Predict Next Step (t+1) for all 6 target sensors with Time-Aware Sequence Blending
+    # 3. Predict Next Step (t+1) for target sensors
     t1_predictions: Dict[str, float] = {}
     for sensor in TARGET_SENSORS:
         model = xgb_models[sensor]
         raw_pred = float(model.predict(df_curr)[0])
         hist_base = sensor_baselines.get(sensor, {}).get("expected", default_baselines[sensor]["expected"])
         
-        # Exponential Moving Average (EMA) & Time-Aware Sequence Blending
-        # 60% ML Sequence Model prediction + 25% Rolling Sequence Mean + 15% Baseline
         s_col = sensor if sensor in buf_df.columns else next((c for c in buf_df.columns if c.lower() == sensor.lower()), None)
         roll_mean = float(buf_df[s_col].tail(5).mean()) if s_col else raw_pred
         
@@ -185,40 +213,201 @@ def run_live_inference_and_forecast(
     t_inf = time.time()
     inference_latency_ms = round((t_inf - t0) * 1000, 2)
 
-    # 4. Isolation Forest Continuous Anomaly Scoring & Decision Boundary Normalization
+    # 4. Isolation Forest Continuous Anomaly & Stress Scoring
     is_anomaly = False
     anomaly_score = 0.0
     if iso_model:
         try:
-            iso_pred = iso_model.predict(df_curr)[0] # 1 = normal, -1 = anomaly
+            iso_pred = iso_model.predict(df_curr)[0]
             is_anomaly = (iso_pred == -1)
-            # decision_function: positive = normal, negative = anomaly
             dec_score = float(iso_model.decision_function(df_curr)[0])
-            # Convert decision_function to a continuous 0.0 - 1.0 anomaly scale
-            # (Higher score = more anomalous)
             anomaly_score = round(max(0.0, min(1.0, 0.5 - (dec_score * 2.5))), 3)
         except Exception:
             pass
 
-    # 5. Automated Root Cause Analysis & Sensor Deviation Ranking
-    sensor_units = {
-        "Temperature": "°C",
-        "Vibration": "g",
-        "Current": "A",
-        "Voltage": "V",
-        "RPM": "RPM",
-        "Sound": "dB",
-    }
+    # 5. Extract Machine Lifecycle Metadata & Temporal Features
+    machine_age_days = float(feature_vector.get("machine_age_days", 180.0))
+    operating_hours = float(feature_vector.get("operating_hours", machine_age_days * 18.0))
+    history_days = float(feature_vector.get("history_days", max(7.0, machine_age_days * 0.8)))
+    gap_ratio = float(feature_vector.get("gap_ratio", 0.05))
 
+    max_temp = float(operating_limits.get("maxTemperature", 80.0))
+    max_vib = float(operating_limits.get("maxVibration", 2.5))
+    max_cur = float(operating_limits.get("maxCurrent", 15.0))
+    min_rpm = float(operating_limits.get("minRPM", 1000.0))
+
+    # Check immediate safety breaches
+    curr_temp = float(current_reading.get("Temperature", 40.0))
+    curr_vib = float(current_reading.get("Vibration", 0.12))
+    curr_cur = float(current_reading.get("Current", 3.5))
+    curr_rpm = float(current_reading.get("RPM", 1480.0))
+    curr_sound = float(current_reading.get("Sound", 62.0))
+
+    is_limit_breached = (
+        curr_temp >= max_temp or
+        curr_vib >= max_vib or
+        curr_cur >= max_cur or
+        (min_rpm > 0 and curr_rpm <= min_rpm)
+    )
+
+    # 6. Machine Degradation Index (MDI) Calculation Pipeline
+    # Component A: Historical Accumulated Wear (70% weight baseline)
+    base_lifecycle_wear = min(35.0, (operating_hours / 1000.0) * 1.2 + (machine_age_days / 365.0) * 1.5)
+    
+    # Calculate Sensor Cumulative Drifts
+    sensor_drifts: Dict[str, float] = {}
+    total_drift_sum = 0.0
+    for s in TARGET_SENSORS:
+        act = float(current_reading.get(s, default_baselines[s]["expected"]))
+        base_exp = sensor_baselines.get(s, {}).get("expected", default_baselines[s]["expected"])
+        
+        if s == "Temperature":
+            d_ratio = max(0.0, (act - base_exp) / max(1.0, max_temp - base_exp))
+        elif s == "Vibration":
+            d_ratio = max(0.0, (act - base_exp) / max(0.1, max_vib - base_exp))
+        elif s == "Current":
+            d_ratio = max(0.0, (act - base_exp) / max(1.0, max_cur - base_exp))
+        elif s == "RPM":
+            d_ratio = max(0.0, (1480.0 - act) / max(1.0, 1480.0 - min_rpm))
+        else:
+            d_ratio = max(0.0, (act - base_exp) / 30.0)
+            
+        sensor_drifts[s] = d_ratio
+        total_drift_sum += d_ratio
+
+    mdi_historical = min(75.0, base_lifecycle_wear + total_drift_sum * 15.0)
+
+    # Component B: Recent Trend (20% weight baseline)
+    recent_trend_sum = 0.0
+    for s in TARGET_SENSORS:
+        s_col = s if s in buf_df.columns else next((c for c in buf_df.columns if c.lower() == s.lower()), None)
+        if s_col and len(buf_df[s_col]) >= 5:
+            s_std = float(buf_df[s_col].tail(10).std())
+            recent_trend_sum += s_std
+    mdi_recent_trend = min(80.0, recent_trend_sum * 8.0)
+
+    # Component C: Current Instantaneous Stress Index (CSI) (10% weight baseline)
+    csi_instant = min(100.0, total_drift_sum * 30.0 + anomaly_score * 20.0)
+
+    # Dynamic Historical Weighting Adaptability based on Available History
+    # 1 year history -> 90% historical weight, 10% recent/current
+    # 1 week history -> 40% historical weight, 60% recent/current
+    w_hist = max(0.40, min(0.90, 0.40 + 0.50 * (history_days / 365.0)))
+    w_rem = 1.0 - w_hist
+    w_recent = w_rem * 0.70
+    w_instant = w_rem * 0.30
+
+    mdi_composite = (w_hist * mdi_historical) + (w_recent * mdi_recent_trend) + (w_instant * csi_instant)
+
+    # Long-Term Health Memory Integration (Smooth Monotonic Evolution)
+    # Daily noise will NOT fluctuate health wildly; smooth update factor alpha=0.02
+    initial_default_mdi = min(60.0, mdi_composite)
+    prev_mdi_memory = get_machine_mdi_memory(machine_id, initial_default_mdi)
+
+    if is_limit_breached:
+        # Immediate safety limit penalty
+        mdi_smoothed = min(100.0, max(80.0, mdi_composite * 1.5))
+    else:
+        # Slow monotonic evolution (2% new, 98% memory)
+        mdi_smoothed = round(0.98 * prev_mdi_memory + 0.02 * mdi_composite, 2)
+
+    update_machine_mdi_memory(machine_id, mdi_smoothed)
+
+    # Health Score is derived directly: Health Score = 100 - MDI
+    health_score = max(0, min(100, int(round(100.0 - mdi_smoothed))))
+
+    # 7. Explainability Attribution Breakdown
+    # Percentage attribution of degradation across sensors
+    explainability_attribution: Dict[str, int] = {}
+    if total_drift_sum > 0:
+        for s in TARGET_SENSORS:
+            pct = int(round((sensor_drifts[s] / total_drift_sum) * 100))
+            explainability_attribution[s] = pct
+    else:
+        explainability_attribution = {"Temperature": 30, "Vibration": 30, "Current": 20, "RPM": 10, "Sound": 5, "Voltage": 5}
+
+    # 8. Hybrid Lifecycle RSOT Engine Calculation
+    # Remaining Safe Operating Time based on Machine Age, Operating Hours, Degradation Velocity & Limits
+    degradation_velocities: Dict[str, float] = {}
+    sensor_rsot_projections: Dict[str, float] = {}
+
+    for s in target_sensors:
+        slope = cached.get("historical_degradation_slopes", {}).get(s, 0.0)
+        act = float(current_reading.get(s, default_baselines.get(s, {}).get("expected", 50.0)))
+        base_exp = sensor_baselines.get(s, {}).get("expected", default_baselines.get(s, {}).get("expected", 50.0))
+        
+        # Degradation velocity in sensor units per hour
+        if abs(slope) > 0.00001:
+            vel = abs(slope)
+        else:
+            vel = max(0.001, abs(act - base_exp) / max(1.0, operating_hours))
+            
+        degradation_velocities[s] = round(vel, 5)
+
+        # Distance to safety threshold
+        s_lower = s.lower()
+        if "temp" in s_lower:
+            dist = max(0.0, max_temp - act)
+        elif "vib" in s_lower:
+            dist = max(0.0, max_vib - act)
+        elif "curr" in s_lower:
+            dist = max(0.0, max_cur - act)
+        elif "rpm" in s_lower:
+            dist = max(0.0, act - min_rpm)
+        else:
+            dist = max(0.0, base_exp * 1.5 - act)
+
+        s_rsot = dist / max(0.00001, vel)
+        sensor_rsot_projections[s] = s_rsot
+
+    # Find minimum remaining operating hours across sensors
+    min_sensor_rsot_hours = min(sensor_rsot_projections.values()) if sensor_rsot_projections else 2450.0
+    weakest_sensor = min(sensor_rsot_projections, key=sensor_rsot_projections.get) if sensor_rsot_projections else "Temperature"
+
+    # Wear-based RSOT
+    rsot_wear_hours = max(24.0, (100.0 - mdi_smoothed) * 220.0)
+
+    if is_limit_breached:
+        remaining_operating_hours = 0
+        breach_sensor = weakest_sensor
+        breach_value = float(current_reading.get(weakest_sensor, 0.0))
+    else:
+        remaining_operating_hours = int(round(min(rsot_wear_hours, min_sensor_rsot_hours)))
+        remaining_operating_hours = max(48, min(25000, remaining_operating_hours))
+
+    # 9. Dynamic Confidence Score
+    # Confidence increases with available history and continuous data stream
+    confidence_score = int(round(max(50.0, min(98.0, 50.0 + min(40.0, history_days * 0.5) - (gap_ratio * 15.0)))))
+
+    # Forecast Trajectory Generation for UI
+    forecast_trajectory: List[Dict[str, Any]] = []
+    step_hours = 24
+    for h in range(step_hours, 2001, step_hours):
+        target_timestamp = time.time() + (h * 3600)
+        target_date_str = time.strftime("%Y-%m-%d", time.localtime(target_timestamp))
+        
+        proj_state: Dict[str, float] = {}
+        for s in TARGET_SENSORS:
+            curr_v = float(current_reading.get(s, default_baselines[s]["expected"]))
+            proj_v = curr_v + (degradation_velocities[s] * h)
+            proj_state[s] = round(proj_v, 3)
+
+        forecast_trajectory.append({
+            "operatingHours": int(operating_hours + h),
+            "targetDate": target_date_str,
+            "predictions": proj_state
+        })
+
+    # Root Cause Analysis
     sensor_deviations = []
     cause_rankings = []
+    sensor_units = {"Temperature": "°C", "Vibration": "g", "Current": "A", "Voltage": "V", "RPM": "RPM", "Sound": "dB"}
 
     for s in TARGET_SENSORS:
         act = float(current_reading.get(s, 0.0))
         base_exp = sensor_baselines.get(s, {}).get("expected", default_baselines[s]["expected"])
         dev = round(act - base_exp, 2)
         dev_ratio = abs(dev) / max(0.01, base_exp)
-        
         sensor_deviations.append({
             "sensor": s,
             "expected": base_exp,
@@ -227,19 +416,15 @@ def run_live_inference_and_forecast(
             "unit": sensor_units[s],
             "devRatio": dev_ratio
         })
-
         if dev_ratio > 0.10 or abs(dev) > 0.5:
             cause_rankings.append((s, dev, dev_ratio))
 
-    # Sort sensors by highest relative deviation ratio
     cause_rankings.sort(key=lambda x: x[2], reverse=True)
-
     affected_sensors = [c[0] for c in cause_rankings] if cause_rankings else []
     primary_cause = f"Abnormal {cause_rankings[0][0]} ({'+' if cause_rankings[0][1] > 0 else ''}{cause_rankings[0][1]} {sensor_units[cause_rankings[0][0]]})" if cause_rankings else "Nominal Baseline"
     secondary_cause = f"Secondary drift in {cause_rankings[1][0]}" if len(cause_rankings) > 1 else None
     supporting_cause = f"Fluctuation in {cause_rankings[2][0]}" if len(cause_rankings) > 2 else None
 
-    # Operator recommended action selection
     if affected_sensors:
         top_s = affected_sensors[0]
         if top_s == "Temperature":
@@ -257,184 +442,21 @@ def run_live_inference_and_forecast(
     else:
         rec_action = "Maintain standard preventive inspection schedule."
 
-    # 6. Extract Operating Limits & Failure Specs
-    max_temp = float(operating_limits.get("maxTemperature", 80.0))
-    max_vib = float(operating_limits.get("maxVibration", 2.5))
-    max_cur = float(operating_limits.get("maxCurrent", 15.0))
-    min_rpm = float(operating_limits.get("minRPM", 1000.0))
-    fail_temp = float(operating_limits.get("failureTemperature", max_temp * 1.2))
-    fail_vib = float(operating_limits.get("failureVibration", max_vib * 1.3))
-
-    # 6. Time-Aware Maintenance & Remaining Operating Life (RUL) Forecasting
-    # Extract temporal features or compute baseline
-    machine_age_days = int(feature_vector.get("machine_age_days", 180))
-    operating_hours = int(feature_vector.get("operating_hours", machine_age_days * 20))
-    
-    forecast_trajectory: List[Dict[str, Any]] = []
-    recent_history: Dict[str, List[float]] = {
-        s: [float(current_reading.get(s, 0.0))] for s in TARGET_SENSORS
-    }
-
-    # Step in operating hours increments (e.g. 24h steps) up to 2000h max horizon
-    step_hours_increment = 24
-    max_forecast_hours = 2000
-    
-    remaining_operating_hours: Optional[int] = None
-    primary_degradation_factors: List[str] = []
-    breach_sensor: Optional[str] = None
-    breach_value: Optional[float] = None
-
-    # Check if CURRENT telemetry ALREADY breaches operating limits right now
-    curr_temp_check = float(current_reading.get("Temperature", 40.0))
-    curr_vib_check = float(current_reading.get("Vibration", 0.12))
-    curr_cur_check = float(current_reading.get("Current", 5.0))
-    curr_rpm_check = float(current_reading.get("RPM", 1480.0))
-
-    if curr_temp_check >= max_temp:
-        remaining_operating_hours = 0
-        breach_sensor = "Temperature"
-        breach_value = curr_temp_check
-        is_anomaly = True
-        anomaly_score = max(anomaly_score, 0.95)
-    elif curr_vib_check >= max_vib:
-        remaining_operating_hours = 0
-        breach_sensor = "Vibration"
-        breach_value = curr_vib_check
-        is_anomaly = True
-        anomaly_score = max(anomaly_score, 0.95)
-    elif curr_cur_check >= max_cur:
-        remaining_operating_hours = 0
-        breach_sensor = "Current"
-        breach_value = curr_cur_check
-        is_anomaly = True
-        anomaly_score = max(anomaly_score, 0.95)
-    elif min_rpm > 0 and curr_rpm_check <= min_rpm:
-        remaining_operating_hours = 0
-        breach_sensor = "RPM"
-        breach_value = curr_rpm_check
-        is_anomaly = True
-        anomaly_score = max(anomaly_score, 0.95)
-
-    # Track rates of change to identify primary degrading sensors
-    sensor_degradation_scores: Dict[str, float] = {}
-
-    curr_hours = 0
-    for h in range(step_hours_increment, max_forecast_hours + 1, step_hours_increment):
-        curr_hours = h
-        step_row: Dict[str, float] = {}
-
-        # Build feature vector for this operating hour projection
-        for s in TARGET_SENSORS:
-            curr_v = recent_history[s][-1]
-            prev_v1 = recent_history[s][-2] if len(recent_history[s]) >= 2 else curr_v
-            
-            step_row[s] = curr_v
-            step_row[f"{s}_Lag1"] = prev_v1
-            step_row[f"{s}_Lag2"] = prev_v1
-            step_row[f"{s}_Lag3"] = prev_v1
-            step_row[f"{s}_RoC"] = round(curr_v - prev_v1, 3)
-
-            for w in [5, 10, 30]:
-                window_vals = recent_history[s][-w:]
-                step_row[f"{s}_RollMean_{w}"] = round(float(np.mean(window_vals)), 2)
-                step_row[f"{s}_RollStd_{w}"] = round(float(np.std(window_vals)), 3)
-
-        temp = step_row.get("Temperature", 0.0)
-        cur = step_row.get("Current", 0.0)
-        rpm = max(1.0, step_row.get("RPM", 1.0))
-        vib = step_row.get("Vibration", 0.0)
-
-        step_row["Interaction_Temp_x_Current"] = round(temp * cur, 2)
-        step_row["Interaction_Current_div_RPM"] = round(cur / rpm, 5)
-        step_row["Interaction_Vib_x_RPM"] = round(vib * rpm, 2)
-        step_row["Interaction_Temp_x_Vib"] = round(temp * vib, 3)
-        step_row["LimitDist_MaxTemp"] = round(max_temp - temp, 2)
-        step_row["LimitDist_MaxVib"] = round(max_vib - vib, 3)
-        step_row["LimitDist_MaxCurrent"] = round(max_cur - cur, 2)
-        step_row["LimitDist_MinRPM"] = round(rpm - min_rpm, 0)
-
-        # Predict next operating hour state
-        x_step = [float(step_row.get(c, 0.0)) for c in feature_cols]
-        df_step = pd.DataFrame([x_step], columns=feature_cols)
-
-        next_state: Dict[str, float] = {}
-        for s in TARGET_SENSORS:
-            p_val = float(xgb_models[s].predict(df_step)[0])
-            next_state[s] = round(p_val, 3)
-            recent_history[s].append(p_val)
-
-        # Calculate target date string
-        target_timestamp = time.time() + (h * 3600)
-        target_date_str = time.strftime("%Y-%m-%d", time.localtime(target_timestamp))
-
-        forecast_trajectory.append({
-            "operatingHours": operating_hours + h,
-            "targetDate": target_date_str,
-            "predictions": next_state
-        })
-
-        # Check threshold breach for maintenance planning
-        if remaining_operating_hours is None:
-            if next_state["Temperature"] >= max_temp:
-                remaining_operating_hours = h
-                breach_sensor = "Temperature"
-                breach_value = next_state["Temperature"]
-                sensor_degradation_scores["Temperature"] = sensor_degradation_scores.get("Temperature", 0.0) + 5.0
-            elif next_state["Vibration"] >= max_vib:
-                remaining_operating_hours = h
-                breach_sensor = "Vibration"
-                breach_value = next_state["Vibration"]
-                sensor_degradation_scores["Vibration"] = sensor_degradation_scores.get("Vibration", 0.0) + 5.0
-            elif next_state["Current"] >= max_cur:
-                remaining_operating_hours = h
-                breach_sensor = "Current"
-                breach_value = next_state["Current"]
-                sensor_degradation_scores["Current"] = sensor_degradation_scores.get("Current", 0.0) + 5.0
-            elif next_state["RPM"] <= min_rpm:
-                remaining_operating_hours = h
-                breach_sensor = "RPM"
-                breach_value = next_state["RPM"]
-                sensor_degradation_scores["RPM"] = sensor_degradation_scores.get("RPM", 0.0) + 5.0
-
     t_end = time.time()
     forecast_latency_ms = round((t_end - t_inf) * 1000, 2)
     total_latency_ms = round((t_end - t0) * 1000, 2)
 
-    # 7. Time-Aware Maintenance Calculation Outputs
     if remaining_operating_hours == 0:
         estimated_maintenance_date = "IMMEDIATE EMERGENCY MAINTENANCE REQUIRED"
         estimated_failure_window = "Immediate Breach"
         confidence_score = 99
-        primary_degradation_factors = [f"Critical Limit Breach on {breach_sensor} ({breach_value})"]
+        primary_degradation_factors = [f"Critical Limit Breach on {weakest_sensor}"]
         rsot_formatted = f"CRITICAL LIMIT BREACH (0 operating hours left - Emergency Inspection Required)"
-    elif remaining_operating_hours is None:
-        # Calculate dynamic remaining operating hours based on composite multi-sensor distance to limits
-        curr_temp = float(current_reading.get("Temperature", 40.0))
-        curr_vib = float(current_reading.get("Vibration", 0.12))
-        curr_cur = float(current_reading.get("Current", 5.0))
-        curr_rpm = float(current_reading.get("RPM", 1480.0))
-        curr_sound = float(current_reading.get("Sound", 62.0))
-
-        temp_dist = max(0.0, (max_temp - curr_temp) / max(1.0, max_temp - 30.0))
-        vib_dist = max(0.0, (max_vib - curr_vib) / max(0.1, max_vib))
-        cur_dist = max(0.0, (max_cur - curr_cur) / max(1.0, max_cur))
-        rpm_dist = max(0.0, curr_rpm / 1500.0)
-        sound_dist = max(0.0, (85.0 - curr_sound) / 30.0)
-
-        composite_dist = (temp_dist * 0.25 + vib_dist * 0.25 + cur_dist * 0.20 + rpm_dist * 0.15 + sound_dist * 0.15)
-        remaining_operating_hours = int(max(48, min(25000, composite_dist * 18000)))
-        est_maint_time = time.time() + (remaining_operating_hours * 3600)
-        estimated_maintenance_date = time.strftime("%d %B %Y", time.localtime(est_maint_time))
-        estimated_failure_window = time.strftime("%B %Y", time.localtime(est_maint_time + 30 * 86400))
-        confidence_score = 94
-        primary_degradation_factors = ["Nominal Degradation Baseline"]
-        rsot_formatted = f"Healthy ({remaining_operating_hours:,} operating hours)"
     else:
         est_maint_time = time.time() + (remaining_operating_hours * 3600)
         estimated_maintenance_date = time.strftime("%d %B %Y", time.localtime(est_maint_time))
         estimated_failure_window = time.strftime("%B %Y", time.localtime(est_maint_time + 15 * 86400))
-        confidence_score = min(96, max(82, 100 - int((remaining_operating_hours / 10000) * 10)))
-        primary_degradation_factors = [breach_sensor] if breach_sensor else ["Multi-Sensor Drift"]
+        primary_degradation_factors = [weakest_sensor] if weakest_sensor else ["Multi-Sensor Drift"]
         rsot_formatted = f"{remaining_operating_hours:,} operating hours left (Est. Maintenance: {estimated_maintenance_date})"
 
     return {
@@ -442,6 +464,12 @@ def run_live_inference_and_forecast(
         "machine_id": machine_id,
         "model_version": version,
         "predicted_next": t1_predictions,
+        "health_score": health_score,
+        "machine_degradation_index": round(mdi_smoothed, 2),
+        "machine_wear_index": round(mdi_historical, 2),
+        "current_stress_index": round(csi_instant, 2),
+        "explainability_attribution": explainability_attribution,
+        "degradation_velocities": degradation_velocities,
         "is_anomaly": is_anomaly,
         "anomaly_score": anomaly_score,
         "affected_sensors": affected_sensors,
@@ -460,8 +488,8 @@ def run_live_inference_and_forecast(
         "rsot_seconds": remaining_operating_hours * 3600,
         "rsot_formatted": rsot_formatted,
         "breach_step": None,
-        "violating_sensor": breach_sensor,
-        "breach_value": breach_value,
+        "violating_sensor": breach_sensor if is_limit_breached else None,
+        "breach_value": float(current_reading.get(breach_sensor, 0.0)) if is_limit_breached and breach_sensor else None,
         "breach_limit": max_temp if breach_sensor == "Temperature" else max_vib,
         "forecast_trajectory": forecast_trajectory,
         "performance": {
