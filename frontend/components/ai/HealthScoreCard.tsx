@@ -4,8 +4,8 @@ import { Activity, ShieldCheck, AlertTriangle, CheckCircle2 } from 'lucide-react
 import { cn } from '@/lib/utils';
 
 interface HealthScoreCardProps {
-  score: number;
-  status: 'Excellent' | 'Good' | 'Warning' | 'Critical';
+  score?: number | null;
+  status?: 'Excellent' | 'Good' | 'Warning' | 'Critical' | null;
   currentReading?: {
     temperature: number;
     vibration: number;
@@ -17,11 +17,11 @@ interface HealthScoreCardProps {
   operatingLimits?: Record<string, number>;
 }
 
-export function HealthScoreCard({ score = 100, status = 'Excellent', currentReading, operatingLimits = {} }: HealthScoreCardProps) {
-  // SVG Circular Geometry
+export function HealthScoreCard({ score, status, currentReading, operatingLimits = {} }: HealthScoreCardProps) {
+  const displayScore = score !== undefined && score !== null ? score : null;
   const radius = 46;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (score / 100) * circumference;
+  const strokeDashoffset = displayScore !== null ? circumference - (displayScore / 100) * circumference : circumference;
 
   const getStatusColor = (s: string) => {
     if (s === 'Critical') return { text: 'text-[#FF1744]', stroke: '#FF1744', bg: 'bg-[#FF1744]/10 border-[#FF1744]/30' };
@@ -30,7 +30,7 @@ export function HealthScoreCard({ score = 100, status = 'Excellent', currentRead
     return { text: 'text-[#00E676]', stroke: '#00E676', bg: 'bg-[#00E676]/10 border-[#00E676]/30' };
   };
 
-  const colors = getStatusColor(status);
+  const colors = getStatusColor(status || 'Excellent');
 
   const maxTemp = operatingLimits.maxTemperature || 80;
   const maxVib = operatingLimits.maxVibration || 2.5;
@@ -115,7 +115,9 @@ export function HealthScoreCard({ score = 100, status = 'Excellent', currentRead
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-            <span className="text-2xl font-black text-white tracking-tight tabular-nums">{score}%</span>
+            <span className="text-2xl font-black text-white tracking-tight tabular-nums">
+              {displayScore !== null ? `${displayScore}%` : '--%'}
+            </span>
             <span className="text-[8px] text-[#64748B] font-bold uppercase">HEALTH SCORE</span>
           </div>
         </div>

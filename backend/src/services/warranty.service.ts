@@ -37,28 +37,52 @@ export class WarrantyService {
   }
 
   async getWarrantiesByCompany(companyId: string) {
-    return Warranty.find({ companyId: new mongoose.Types.ObjectId(companyId) })
+    const warranties = await Warranty.find({ companyId: new mongoose.Types.ObjectId(companyId) })
       .populate('machineId', 'name machineCode')
       .sort({ expiryDate: 1 })
-      .lean({ virtuals: true });
+      .exec();
+
+    const now = new Date();
+    return warranties.map((w) => {
+      const days = Math.ceil((w.expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      let currentStatus: WarrantyStatus = w.status;
+      if (days <= 0) currentStatus = WarrantyStatus.EXPIRED;
+      else if (days <= 30) currentStatus = WarrantyStatus.EXPIRING_SOON;
+      else currentStatus = WarrantyStatus.ACTIVE;
+
+      const obj: any = w.toObject({ virtuals: true });
+      obj.daysRemaining = Math.max(0, days);
+      obj.status = currentStatus;
+      return obj;
+    });
   }
 
   async getWarrantySummary(companyId: string) {
-    const [total, active, expiringSoon, expired] = await Promise.all([
-      Warranty.countDocuments({ companyId }),
-      Warranty.countDocuments({ companyId, status: WarrantyStatus.ACTIVE }),
-      Warranty.countDocuments({ companyId, status: WarrantyStatus.EXPIRING_SOON }),
-      Warranty.countDocuments({ companyId, status: WarrantyStatus.EXPIRED }),
-    ]);
+    const warranties = await Warranty.find({ companyId: new mongoose.Types.ObjectId(companyId) }).exec();
+    const now = new Date();
+    let active = 0, expiringSoon = 0, expired = 0;
+
+    warranties.forEach((w) => {
+      const days = Math.ceil((w.expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      if (days <= 0) expired++;
+      else if (days <= 30) expiringSoon++;
+      else active++;
+    });
 
     const claimsAgg = await WarrantyClaim.aggregate([
       { $match: { companyId: new mongoose.Types.ObjectId(companyId) } },
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]);
-    const claims: Record<string, number> = {};
-    claimsAgg.forEach((c: any) => { claims[c._id] = c.count; });
 
-    return { total, active, expiringSoon, expired, claims };
+    const claimsSubmitted = claimsAgg.reduce((sum, c) => sum + c.count, 0);
+
+    return {
+      total: warranties.length,
+      active,
+      expiringSoon,
+      expired,
+      claimsSubmitted,
+    };
   }
 
   async createWarranty(data: any, companyId: string, userId: string) {

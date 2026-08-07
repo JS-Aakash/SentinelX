@@ -7,6 +7,8 @@ import {
   Calendar, MapPin, Settings, FileText, Download,
 } from 'lucide-react';
 
+import { useAuthStore } from '@/store/authStore';
+
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 
 interface PassportClientProps {
@@ -23,6 +25,7 @@ function InfoRow({ label, value, mono }: { label: string; value: string | number
 }
 
 export default function PassportClient({ machineId }: PassportClientProps) {
+  const { accessToken: token } = useAuthStore();
   const [machine, setMachine] = useState<any>(null);
   const [timeline, setTimeline] = useState<any[]>([]);
   const [warranties, setWarranties] = useState<any[]>([]);
@@ -31,12 +34,15 @@ export default function PassportClient({ machineId }: PassportClientProps) {
   const passportUrl = typeof window !== 'undefined' ? window.location.href : '';
 
   const fetchData = useCallback(async () => {
+    if (!machineId || machineId === 'undefined') return;
     setLoading(true);
     try {
-      // Machine data is public-ish for passport - use machine API
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const [mRes, tRes] = await Promise.all([
-        fetch(`${API}/machines/${machineId}`),
-        fetch(`${API}/analytics/timeline/${machineId}`),
+        fetch(`${API}/machines/${machineId}`, { headers }),
+        fetch(`${API}/analytics/timeline/${machineId}`, { headers }),
       ]);
       if (mRes.ok) {
         const mj = await mRes.json();
@@ -51,7 +57,7 @@ export default function PassportClient({ machineId }: PassportClientProps) {
     } finally {
       setLoading(false);
     }
-  }, [machineId]);
+  }, [machineId, token]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 

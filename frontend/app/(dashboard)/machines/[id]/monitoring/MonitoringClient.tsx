@@ -291,7 +291,7 @@ export default function MonitoringClient({ machineId }: { machineId: string }) {
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {METRICS.map((m) => {
-            const rawVal = latestReading ? (latestReading as any)[m.key] : null;
+            const rawVal = isOnline && latestReading ? (latestReading as any)[m.key] : null;
             const val = rawVal != null ? Number(rawVal) : null;
 
             let status: 'normal' | 'warning' | 'critical' | 'offline' = 'normal';
@@ -328,7 +328,7 @@ export default function MonitoringClient({ machineId }: { machineId: string }) {
           {METRICS.map((m) => (
             <SensorChart
               key={m.key}
-              data={chartsData[m.key] || []}
+              data={isOnline ? (chartsData[m.key] || []) : []}
               metric={m.label}
               unit={m.unit}
               color={m.color}

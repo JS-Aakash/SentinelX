@@ -39,17 +39,18 @@ function StatCard({
   );
 }
 
-function HealthBar({ label, value, color }: { label: string; value: number; color: string }) {
+function HealthBar({ label, value, total = 1, color }: { label: string; value: number; total?: number; color: string }) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5 font-mono">
       <div className="flex justify-between text-xs">
         <span className="text-[#94A3B8]">{label}</span>
-        <span className="text-white font-medium">{value}</span>
+        <span className="text-white font-semibold">{value} machines ({pct}%)</span>
       </div>
       <div className="h-2 bg-[#1B1D2A] rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-700 ${color}`}
-          style={{ width: `${Math.min(100, (value / 20) * 100)}%` }}
+          style={{ width: `${pct}%` }}
         />
       </div>
     </div>
@@ -200,10 +201,10 @@ export default function AnalyticsClient() {
               <Cpu className="w-4 h-4 text-blue-400" /> Machine Health Distribution
             </h3>
             <div className="space-y-4">
-              <HealthBar label="🟢 Healthy (≥80)" value={machines.healthDistribution?.healthy || 0} color="bg-emerald-500" />
-              <HealthBar label="🟡 Warning (50-79)" value={machines.healthDistribution?.warning || 0} color="bg-amber-500" />
-              <HealthBar label="🔴 Critical (<50)" value={machines.healthDistribution?.critical || 0} color="bg-red-500" />
-              <HealthBar label="⚪ Unknown (no data)" value={machines.healthDistribution?.unknown || 0} color="bg-slate-500" />
+              <HealthBar label="🟢 Healthy (≥80)" value={machines.healthDistribution?.healthy || 0} total={machines.total || 1} color="bg-emerald-500" />
+              <HealthBar label="🟡 Warning (50-79)" value={machines.healthDistribution?.warning || 0} total={machines.total || 1} color="bg-amber-500" />
+              <HealthBar label="🔴 Critical (<50)" value={machines.healthDistribution?.critical || 0} total={machines.total || 1} color="bg-red-500" />
+              <HealthBar label="⚪ Unknown (no data)" value={machines.healthDistribution?.unknown || 0} total={machines.total || 1} color="bg-slate-500" />
             </div>
           </div>
 

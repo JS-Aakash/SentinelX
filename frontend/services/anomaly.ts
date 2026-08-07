@@ -66,4 +66,7 @@ export const anomalyApi = {
 
   resolve: (eventId: string, resolutionNotes?: string) =>
     api.put<{ success: boolean; message: string; data: AnomalyEventRecord }>(`/anomalies/${eventId}/resolve`, { resolutionNotes }),
+
+  clearHistory: (machineId: string) =>
+    api.delete<{ success: boolean; message: string }>(`/anomalies/history/${machineId}/clear`),
 };

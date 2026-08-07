@@ -171,4 +171,7 @@ export const aiApi = {
 
   getAlerts: (machineId: string) =>
     api.get<ApiResponse<PredictionRecord[]>>(`/ai/alerts/${machineId}`),
+
+  clearPredictionHistory: (machineId: string) =>
+    api.delete<ApiResponse>(`/ai/predictions/history/${machineId}/clear`),
 };

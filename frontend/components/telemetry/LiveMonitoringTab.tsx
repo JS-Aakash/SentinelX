@@ -70,18 +70,7 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
     voltage: number;
     rpm: number;
     sound: number;
-  }>>(() => {
-    const now = Date.now();
-    return Array.from({ length: 10 }).map((_, i) => ({
-      time: new Date(now - (10 - i) * 3000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      temperature: 42.0,
-      vibration: 0.14,
-      current: 3.5,
-      voltage: 230.0,
-      rpm: 1480,
-      sound: 58.0,
-    }));
-  });
+  }>>([]);
 
   const fetchLiveTelemetry = useCallback(async () => {
     try {
@@ -203,76 +192,76 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
       title: 'Temperature (DHT22)',
       dataKey: 'temperature',
       colorHex: '#F59E0B',
-      value: telemetry?.temperature != null ? `${telemetry.temperature.toFixed(1)}` : '—',
+      value: isOnline && telemetry?.temperature != null ? `${telemetry.temperature.toFixed(1)}` : '—',
       unit: '°C',
       icon: Thermometer,
       color: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
       limitInfo: operatingLimits?.maxTemperature ? `Max Limit: ${operatingLimits.maxTemperature}°C` : null,
-      sensorCheck: getSensorStatus(telemetry?.temperature ?? null, operatingLimits?.maxTemperature),
+      sensorCheck: getSensorStatus(isOnline && telemetry?.temperature != null ? telemetry.temperature : null, operatingLimits?.maxTemperature),
     },
     {
       id: 'current',
       title: 'Current (Kalman ACS712)',
       dataKey: 'current',
       colorHex: '#3B82F6',
-      value: telemetry?.current != null ? `${telemetry.current.toFixed(2)}` : '—',
+      value: isOnline && telemetry?.current != null ? `${telemetry.current.toFixed(2)}` : '—',
       unit: 'A',
       icon: Zap,
       color: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
       limitInfo: operatingLimits?.maxCurrent ? `Max Limit: ${operatingLimits.maxCurrent}A` : null,
-      sensorCheck: getSensorStatus(telemetry?.current ?? null, operatingLimits?.maxCurrent),
+      sensorCheck: getSensorStatus(isOnline && telemetry?.current != null ? telemetry.current : null, operatingLimits?.maxCurrent),
     },
     {
       id: 'voltage',
       title: 'Voltage',
       dataKey: 'voltage',
       colorHex: '#A855F7',
-      value: telemetry?.voltage != null ? `${telemetry.voltage.toFixed(1)}` : '—',
+      value: isOnline && telemetry?.voltage != null ? `${telemetry.voltage.toFixed(1)}` : '—',
       unit: 'V',
       icon: Gauge,
       color: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
       limitInfo: 'Rated: 220V - 240V',
-      sensorCheck: getSensorStatus(telemetry?.voltage ?? null),
+      sensorCheck: getSensorStatus(isOnline && telemetry?.voltage != null ? telemetry.voltage : null),
     },
     {
       id: 'rpm',
       title: 'Rotational Speed (RPM)',
       dataKey: 'rpm',
       colorHex: '#10B981',
-      value: telemetry?.rpm != null ? `${Math.round(telemetry.rpm)}` : '—',
+      value: isOnline && telemetry?.rpm != null ? `${Math.round(telemetry.rpm)}` : '—',
       unit: 'RPM',
       icon: Activity,
       color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
       limitInfo: operatingLimits?.minRPM ? `Min Limit: ${operatingLimits.minRPM} RPM` : null,
-      sensorCheck: getSensorStatus(telemetry?.rpm ?? null, operatingLimits?.minRPM, true),
+      sensorCheck: getSensorStatus(isOnline && telemetry?.rpm != null ? telemetry.rpm : null, operatingLimits?.minRPM, true),
     },
     {
       id: 'vibration',
       title: 'Vibration (ADXL345 3-Axis)',
       dataKey: 'vibration',
       colorHex: '#06B6D4',
-      value: telemetry?.vibration != null ? `${telemetry.vibration.toFixed(2)}` : '—',
+      value: isOnline && telemetry?.vibration != null ? `${telemetry.vibration.toFixed(2)}` : '—',
       unit: 'g',
       icon: Radio,
       color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-      limitInfo: telemetry?.acceleration
+      limitInfo: isOnline && telemetry?.acceleration
         ? `X: ${telemetry.acceleration.x}g | Y: ${telemetry.acceleration.y}g | Z: ${telemetry.acceleration.z}g`
         : operatingLimits?.maxVibration
         ? `Max Limit: ${operatingLimits.maxVibration} g`
-        : 'X: 0.02g | Y: -0.01g | Z: 1.01g',
-      sensorCheck: getSensorStatus(telemetry?.vibration ?? null, operatingLimits?.maxVibration),
+        : 'X: 0.00g | Y: 0.00g | Z: 0.00g',
+      sensorCheck: getSensorStatus(isOnline && telemetry?.vibration != null ? telemetry.vibration : null, operatingLimits?.maxVibration),
     },
     {
       id: 'sound',
       title: 'Sound Level',
       dataKey: 'sound',
       colorHex: '#F43F5E',
-      value: telemetry?.sound != null ? `${telemetry.sound.toFixed(1)}` : '—',
+      value: isOnline && telemetry?.sound != null ? `${telemetry.sound.toFixed(1)}` : '—',
       unit: 'dB / ADC',
       icon: Volume2,
       color: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-      limitInfo: 'Acoustic Baseline: 60 dB',
-      sensorCheck: getSensorStatus(telemetry?.sound ?? null),
+      limitInfo: (operatingLimits as any)?.maxSound ? `Max Limit: ${(operatingLimits as any).maxSound} dB` : null,
+      sensorCheck: getSensorStatus(isOnline && telemetry?.sound != null ? telemetry.sound : null, (operatingLimits as any)?.maxSound),
     },
   ];
 
@@ -380,32 +369,39 @@ export function LiveMonitoringTab({ machineId, assignedDevice, operatingLimits }
               </div>
 
               {/* INDIVIDUAL DEDICATED GRAPH FOR THIS METRIC */}
-              <div className="h-28 w-full my-3">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={history} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id={`grad-${card.id}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={card.colorHex} stopOpacity={0.4} />
-                        <stop offset="95%" stopColor={card.colorHex} stopOpacity={0.0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="time" stroke="#475569" fontSize={9} tickLine={false} />
-                    <YAxis stroke="#475569" fontSize={9} tickLine={false} domain={['auto', 'auto']} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#0D0E15', borderColor: '#1E2235', borderRadius: '6px', fontSize: '11px', color: '#fff' }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey={card.dataKey}
-                      name={`${card.title} (${card.unit})`}
-                      stroke={card.colorHex}
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill={`url(#grad-${card.id})`}
-                      isAnimationActive={false}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+              <div className="h-28 w-full my-3 flex items-center justify-center border border-dashed border-[#1E2235] rounded-lg bg-[#08090E] overflow-hidden">
+                {isOnline && history.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={history} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id={`grad-${card.id}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={card.colorHex} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={card.colorHex} stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="time" stroke="#475569" fontSize={9} tickLine={false} />
+                      <YAxis stroke="#475569" fontSize={9} tickLine={false} domain={['auto', 'auto']} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: '#0D0E15', borderColor: '#1E2235', borderRadius: '6px', fontSize: '11px', color: '#fff' }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey={card.dataKey}
+                        name={`${card.title} (${card.unit})`}
+                        stroke={card.colorHex}
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill={`url(#grad-${card.id})`}
+                        isAnimationActive={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-1 text-[10px] text-[#475569] font-mono">
+                    <WifiOff size={16} className="text-[#64748B]" />
+                    <span>No Live Data Stream</span>
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 border-t border-[oklch(0.16_0.008_240)] flex items-center justify-between text-[11px] text-[oklch(0.50_0.01_240)] font-mono">

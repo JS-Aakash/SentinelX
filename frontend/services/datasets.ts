@@ -98,4 +98,18 @@ export const datasetsApi = {
 
   getDownloadUrl: (id: string, type: 'original' | 'clean' | 'engineered') =>
     `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1'}/datasets/${id}/download/${type}`,
+
+  // Authenticated file download via Axios Blob
+  downloadFile: async (id: string, type: 'original' | 'clean' | 'engineered' = 'original', filename = 'dataset.csv') => {
+    const response = await api.get(`/datasets/${id}/download/${type}`, {
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
 };

@@ -644,14 +644,14 @@ export function HistoricalDataTab({ machineId }: HistoricalDataTabProps) {
                           </button>
 
                           {/* Downloads */}
-                          <a
-                            href={datasetsApi.getDownloadUrl(ds._id, 'original')}
-                            download
-                            className="p-1.5 rounded bg-[#141724] border border-[#262A3E] text-[#94A3B8] hover:text-white"
+                          <button
+                            type="button"
+                            onClick={() => datasetsApi.downloadFile(ds._id, 'original', ds.originalFileName)}
+                            className="p-1.5 rounded bg-[#141724] border border-[#262A3E] text-[#94A3B8] hover:text-white transition-all active:scale-95"
                             title="Download Original File"
                           >
                             <Download size={12} />
-                          </a>
+                          </button>
 
                           <button
                             onClick={() => handleDeleteVersion(ds._id)}

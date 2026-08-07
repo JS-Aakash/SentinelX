@@ -101,8 +101,16 @@ export const resolveAnomalyEvent = asyncHandler(async (req: Request, res: Respon
   event.status = 'Resolved';
   event.resolvedAt = new Date();
   event.resolvedBy = req.user!.userId as any;
-  event.resolutionNotes = resolutionNotes || 'Resolved by operator';
+  if (resolutionNotes) event.resolutionNotes = resolutionNotes;
   await event.save();
 
   sendSuccess(res, 'Anomaly event resolved successfully', event);
+});
+
+export const clearAnomalyHistory = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { machineId } = req.params as Record<string, string>;
+  const companyId = req.user!.companyId.toString();
+
+  const result = await AnomalyEvent.deleteMany({ machineId, companyId });
+  sendSuccess(res, 'Anomaly audit log & historical events cleared successfully', { deletedCount: result.deletedCount });
 });

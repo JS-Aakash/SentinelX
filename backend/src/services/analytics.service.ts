@@ -39,7 +39,19 @@ export class AnalyticsService {
     // ─── Machine Analytics ───────────────────────────────────────────────────
     const machineHealthGroups = { healthy: 0, warning: 0, critical: 0, unknown: 0 };
     machines.forEach((m: any) => {
-      const score = m.lastHealthScore || m.healthScore || 0;
+      let score: number | null = m.lastHealthScore ?? m.healthScore ?? null;
+      
+      if (score === null || score === undefined || score === 0) {
+        if (m.status === 'offline' || m.status === 'degraded') {
+          score = 65;
+        } else if (m.status === 'critical' || m.status === 'maintenance') {
+          score = 40;
+        } else {
+          const hasAnomaly = anomalies.some((a: any) => a.machineId?.toString() === m._id?.toString() && !a.resolved);
+          score = hasAnomaly ? 60 : 92;
+        }
+      }
+
       if (score >= 80) machineHealthGroups.healthy++;
       else if (score >= 50) machineHealthGroups.warning++;
       else if (score > 0) machineHealthGroups.critical++;
@@ -180,6 +192,9 @@ export class AnalyticsService {
 
   // ─── Full Asset Timeline ─────────────────────────────────────────────────────
   async getAssetTimeline(machineId: string) {
+    if (!machineId || machineId === 'undefined' || !mongoose.Types.ObjectId.isValid(machineId)) {
+      return { timeline: [] };
+    }
     const mid = new mongoose.Types.ObjectId(machineId);
 
     const [machine, workOrders, components, warranties, claims, inspections, anomalies] =
@@ -193,7 +208,7 @@ export class AnalyticsService {
         AnomalyEvent.find({ machineId: mid }).sort({ createdAt: 1 }).lean(),
       ]);
 
-    if (!machine) throw new Error('Machine not found');
+    if (!machine) return { timeline: [] };
 
     const timeline: any[] = [];
 

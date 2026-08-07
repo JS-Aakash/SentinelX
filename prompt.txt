@@ -1,0 +1,679 @@
+Redesign Health Score & RSOT into a True Time-Aware Machine Degradation Engine
+
+The current SentinelX implementation predicts the next sensor values using machine-specific XGBoost models and then derives Health Score and RSOT through deterministic formulas and recursive forecasting. While functional, this causes Health Score to react too strongly to normal daily sensor variations and makes RSOT dependent on repeated next-step predictions.
+
+I want to redesign this into a Machine Lifecycle & Degradation Engine suitable for real industrial deployment.
+
+Overall Objective
+
+Shift the philosophy from:
+
+Current Sensor Values → Health → RSOT
+
+to
+
+Machine Lifecycle + Historical Degradation + Current Condition → Machine Degradation Index → Health Score → RSOT
+
+The Health Score should represent long-term machine condition, not today's sensor values.
+
+The RSOT should represent remaining safe operating life, not merely the first predicted threshold breach.
+
+1. Introduce Machine Degradation Index (MDI)
+
+Create a new internal variable called
+
+Machine Degradation Index (MDI)
+
+Range
+
+0 → 100
+
+where
+
+0 = Brand New Machine
+
+100 = End of Safe Life
+
+The UI may still show only Health Score.
+
+Internally
+
+Health Score = 100 − MDI
+
+Unlike the current implementation,
+
+MDI must evolve slowly.
+
+It should NOT fluctuate because one sensor temporarily rises for a few minutes.
+
+Example
+
+Bad
+
+Day 1
+
+Health
+
+82%
+
+Day 2
+
+76%
+
+Day 3
+
+83%
+
+Day 4
+
+74%
+
+Good
+
+Day 1
+
+82%
+
+Day 2
+
+81.8%
+
+Day 3
+
+81.6%
+
+Day 4
+
+81.4%
+
+2. Separate Current Condition from Long-Term Degradation
+
+Current sensor values should NOT dominate the Health Score.
+
+Instead
+
+Health Score should consist of
+
+70% Historical Degradation
+
+20% Recent Trend
+
+10% Current Instantaneous Condition
+
+Historical
+
+Long-term wear accumulated over months
+
+Recent Trend
+
+Last few days
+
+Current
+
+Current operating condition
+
+Example
+
+A hot day increases temperature.
+
+Health should barely change.
+
+Continuous high temperatures over weeks should gradually reduce Health.
+
+3. Machine Lifecycle Awareness
+
+Every prediction should consider
+
+Installation Date
+
+Machine Age
+
+Operating Hours
+
+Days Since Last Maintenance
+
+Operating Hours Since Last Maintenance
+
+Machine Lifecycle Stage
+
+Example
+
+Installed
+
+↓
+
+2000 Hours
+
+↓
+
+Bearing Replaced
+
+↓
+
+4500 Hours
+
+↓
+
+Current
+
+The AI should understand where the machine is in its lifecycle.
+
+4. Time Awareness
+
+Currently timestamps are used mainly for feature engineering.
+
+Expand this.
+
+The model must understand
+
+Calendar Age
+
+Operating Hours
+
+Elapsed Time Between Samples
+
+Time Gaps
+
+Monitoring Gaps
+
+Historical Duration
+
+Example
+
+One month of data collected
+
+every minute
+
+is very different from
+
+one month collected
+
+once per day.
+
+The AI should recognize this through timestamps and delta time.
+
+5. Handle Partial Historical Data
+
+Many industries cannot provide complete historical datasets.
+
+SentinelX should still work.
+
+Example
+
+Installation
+
+January
+
+Available data
+
+June
+
+July
+
+Current
+
+August
+
+The AI should estimate degradation using
+
+Machine Age
+
+Current Operating Hours
+
+Available History
+
+Trend Since Monitoring Started
+
+Missing months should NOT invalidate predictions.
+
+6. Learn Degradation Instead of Only Next-Step Prediction
+
+Current implementation predicts
+
+Temperature(t+1)
+
+Vibration(t+1)
+
+etc.
+
+Retain these models.
+
+But additionally estimate
+
+Long-Term Degradation Velocity
+
+Example
+
+Temperature increasing
+
+0.002°C/hour
+
+RPM decreasing
+
+0.18 RPM/hour
+
+Current increasing
+
+0.004 A/hour
+
+Store degradation rates.
+
+These should influence RSOT more than instantaneous predictions.
+
+7. RSOT Engine Redesign
+
+Current
+
+Recursive forecasting until threshold.
+
+Replace with
+
+Hybrid Lifecycle RSOT.
+
+Inputs
+
+Machine Age
+
+Operating Hours
+
+Current Sensor State
+
+Historical Drift
+
+Historical Baseline
+
+Recent Trend
+
+Degradation Velocity
+
+Distance to Safety Limits
+
+Maintenance History
+
+Prediction Horizon
+
+Example
+
+Temperature
+
+Current
+
+84
+
+Limit
+
+100
+
+Velocity
+
+0.001°C/hour
+
+Remaining
+
+16000 hours
+
+Do similar calculations for every monitored sensor.
+
+Final
+
+RSOT
+
+Minimum Remaining Safe Hours across all critical parameters.
+
+8. Confidence Score
+
+Every RSOT prediction should include
+
+Confidence
+
+Example
+
+RSOT
+
+14200 hours
+
+Confidence
+
+94%
+
+If
+
+Little historical data
+
+↓
+
+Lower confidence.
+
+If
+
+Long monitoring history
+
+↓
+
+Higher confidence.
+
+9. Maintenance Recovery
+
+Machine Health should improve after maintenance.
+
+Example
+
+Before
+
+Health
+
+58%
+
+Bearing Replacement
+
+↓
+
+Health
+
+78%
+
+Not
+
+100%
+
+because only one component changed.
+
+Maintain
+
+Maintenance Recovery Factor.
+
+Different maintenance actions restore different percentages.
+
+10. Persistence Against Daily Variations
+
+Do NOT allow
+
+One abnormal day
+
+to significantly change Health.
+
+Instead
+
+Maintain
+
+Long-Term Health Memory.
+
+Example
+
+Health
+
+90%
+
+↓
+
+89.9%
+
+↓
+
+89.8%
+
+↓
+
+89.7%
+
+Instead of
+
+90
+
+↓
+
+84
+
+↓
+
+89
+
+↓
+
+83
+
+Daily noise should have very small impact.
+
+11. Differentiate Temporary Stress from Permanent Wear
+
+Example
+
+Generator overloaded
+
+for
+
+10 minutes
+
+↓
+
+Current rises
+
+↓
+
+Temperature rises
+
+↓
+
+Returns to normal
+
+This should create
+
+Temporary Stress
+
+NOT
+
+Permanent Degradation.
+
+Permanent degradation should increase only if abnormal behaviour persists.
+
+Implement
+
+Stress Persistence Logic.
+
+12. Dynamic Historical Weighting
+
+Historical influence should change automatically.
+
+Example
+
+One year history
+
+↓
+
+90% historical
+
+10% recent
+
+Only one week history
+
+↓
+
+40% historical
+
+60% recent
+
+The system should automatically adapt based on available historical data.
+
+13. Time Gap Awareness
+
+If
+
+June
+
+↓
+
+August
+
+No data for July
+
+Do NOT assume continuous operation.
+
+Instead
+
+Use
+
+delta_t
+
+Monitoring Gap
+
+Estimated Operating Hours
+
+to correctly model degradation.
+
+14. Historical Baseline Evolution
+
+Baseline should not remain fixed forever.
+
+Machine behaviour naturally changes.
+
+Allow
+
+Healthy Baseline
+
+to slowly evolve over years
+
+without masking degradation.
+
+15. Separate Wear from Instantaneous Stress
+
+Internally maintain
+
+Machine Wear Index
+
+Current Stress Index
+
+Health
+
+should depend mainly on
+
+Wear
+
+Warnings
+
+should depend mainly on
+
+Stress
+
+Example
+
+Temporary overload
+
+↓
+
+Warning
+
+↓
+
+Health almost unchanged
+
+Months of overload
+
+↓
+
+Health decreases
+
+16. Explainability
+
+Every prediction should explain itself.
+
+Example
+
+Health Reduced Because
+
+Temperature Drift
+
+42%
+
+Current Increase
+
+31%
+
+Vibration Trend
+
+19%
+
+RPM Drop
+
+8%
+
+Similarly
+
+RSOT
+
+should explain
+
+which parameter is expected to fail first.
+
+17. Historical Verification
+
+After implementation
+
+verify using these scenarios
+
+Scenario 1
+
+One hot day
+
+↓
+
+Health changes <1%
+
+Scenario 2
+
+Temperature gradually rises over one month
+
+↓
+
+Health decreases gradually
+
+Scenario 3
+
+Bearing replaced
+
+↓
+
+Health increases
+
+Scenario 4
+
+Only installation date + one month dataset available
+
+↓
+
+Still generates reasonable RSOT
+
+Scenario 5
+
+Missing July data
+
+↓
+
+No sudden degradation spike
+
+Scenario 6
+
+One abnormal sensor packet
+
+↓
+
+Health unchanged
+
+↓
+
+No anomaly
+
+Scenario 7
+
+Seven days of increasing vibration
+
+↓
+
+Health decreases
+
+↓
+
+RSOT shortens
+
+18. Goal
+
+SentinelX should stop behaving like a simple next-step time-series forecaster and instead behave like a machine lifecycle intelligence system. The Health Score should represent accumulated machine wear with strong historical memory, while RSOT should represent the estimated remaining safe operating life by combining machine age, operating hours, degradation velocity, historical trends, maintenance history, and current operating conditions. The system must remain stable under normal day-to-day sensor fluctuations, adapt gracefully to incomplete historical datasets using installation date and available history, and produce realistic, explainable predictions suitable for real industrial deployments.

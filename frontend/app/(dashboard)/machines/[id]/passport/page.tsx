@@ -6,10 +6,7 @@ export const metadata: Metadata = {
   description: 'Digital asset passport with full machine profile, maintenance history, and blockchain verification',
 };
 
-interface Props {
-  params: { id: string };
-}
-
-export default function PassportPage({ params }: Props) {
-  return <PassportClient machineId={params.id} />;
+export default async function PassportPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <PassportClient machineId={id} />;
 }

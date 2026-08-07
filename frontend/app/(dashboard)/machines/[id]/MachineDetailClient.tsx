@@ -49,7 +49,6 @@ const TABS = [
   'Live Monitoring',
   'Historical Data',
   'AI Model',
-  'Overview',
   'Specifications & Limits',
 ] as const;
 type Tab = typeof TABS[number];
@@ -198,8 +197,6 @@ export default function MachineDetailClient({ id }: { id: string }) {
         </div>
 
         <div className="flex items-center gap-2">
-          <MachineStatusBadge status={machine.status} size="md" />
-          <AILifecycleBadge status={machine.aiLifecycleStatus} size="md" />
           <Link
             href={`/machines/${id}/passport`}
             target="_blank"
@@ -360,222 +357,182 @@ export default function MachineDetailClient({ id }: { id: string }) {
         </div>
       )}
 
-      {activeTab === 'Overview' && (
-        <div className="space-y-5 animate-fade-in">
-          {/* Data Collection & Model Training Overview */}
-          <DataCollectionCard machine={machine} onRefresh={() => fetchMachine(id)} />
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* Assigned IoT Device & Hardware Details */}
-            <div className="glass rounded-xl p-5 border-[oklch(0.22_0.01_240)]">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg border bg-[oklch(0.52_0.24_240/0.15)] border-[oklch(0.52_0.24_240/0.3)] flex items-center justify-center text-[oklch(0.75_0.18_200)]">
-                    <Radio size={16} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">Assigned IoT Device</h3>
-                    <p className="text-[11px] text-[oklch(0.50_0.01_240)]">
-                      ESP32 hardware controller and connected sensors
-                    </p>
-                  </div>
+      {activeTab === 'Specifications & Limits' && (
+        <div className="space-y-6 animate-fade-in font-mono">
+          {/* IoT Controller & Sensors Assignment */}
+          <div className="glass rounded-xl p-5 border border-[oklch(0.20_0.01_240)] space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[oklch(0.62_0.20_240/0.15)] border border-[oklch(0.62_0.20_240/0.3)] flex items-center justify-center">
+                  <Cpu size={16} className="text-[oklch(0.62_0.20_240)]" />
                 </div>
-
-                {canWrite && (
-                  <div>
-                    {assignedDevice ? (
-                      <button
-                        onClick={handleUnassignDevice}
-                        disabled={unassigning}
-                        className="inline-flex items-center gap-1 text-xs text-red-400 hover:text-red-300 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 rounded-lg transition-colors"
-                      >
-                        {unassigning ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />}
-                        Unassign Device
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => setShowAssignModal(true)}
-                        className="inline-flex items-center gap-1 text-xs text-white bg-[oklch(0.52_0.24_240/0.2)] border border-[oklch(0.52_0.24_240/0.4)] hover:bg-[oklch(0.52_0.24_240/0.3)] px-3 py-1 rounded-lg transition-colors font-medium"
-                      >
-                        <Plus size={13} />
-                        Assign Device
-                      </button>
-                    )}
-                  </div>
-                )}
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Assigned IoT Device</h3>
+                  <p className="text-[11px] text-[oklch(0.50_0.01_240)]">
+                    ESP32 hardware controller & connected sensors
+                  </p>
+                </div>
               </div>
 
-              {loadingDevice ? (
-                <div className="flex items-center justify-center py-6">
-                  <Loader2 size={20} className="animate-spin text-[oklch(0.45_0.01_240)]" />
-                </div>
-              ) : assignedDevice ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3.5 rounded-xl bg-[oklch(0.12_0.007_240)] border border-[oklch(0.18_0.009_240)]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-[oklch(0.16_0.008_240)] border border-[oklch(0.22_0.01_240)] flex items-center justify-center font-mono font-bold text-xs text-[oklch(0.75_0.18_200)]">
-                        ESP
-                      </div>
-                      <div>
-                        <Link
-                          href={`/devices/${assignedDevice._id}`}
-                          className="font-bold text-white text-xs hover:text-[oklch(0.75_0.18_200)] transition-colors"
-                        >
-                          {assignedDevice.name}
-                        </Link>
-                        <p className="text-[10px] font-mono text-[oklch(0.50_0.01_240)] mt-0.5">
-                          {assignedDevice.deviceId} · FW: {assignedDevice.firmwareVersion || 'v1.0.0'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <DeviceStatusBadge status={assignedDevice.status} size="sm" />
-                      <Link
-                        href={`/devices/${assignedDevice._id}`}
-                        className="text-xs text-[oklch(0.62_0.20_240)] hover:underline"
-                      >
-                        View Device →
-                      </Link>
-                    </div>
-                  </div>
-
-                  {/* Connected Sensors Grid */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] uppercase tracking-wider font-semibold text-[oklch(0.45_0.01_240)]">
-                        Connected Sensors ({machineSensors.length})
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {machineSensors.map((s) => (
-                        <div
-                          key={s._id}
-                          className="p-2.5 rounded-lg bg-[oklch(0.12_0.007_240)] border border-[oklch(0.18_0.009_240)] flex items-center justify-between text-xs"
-                        >
-                          <div className="min-w-0">
-                            <p className="font-medium text-white truncate text-[11px]">
-                              {s.sensorName.split(' ')[0]}
-                            </p>
-                            <p className="text-[9px] font-mono text-[oklch(0.45_0.01_240)]">
-                              {s.unit} · {s.samplingInterval}
-                            </p>
-                          </div>
-                          <span
-                            className={cn(
-                              'w-2 h-2 rounded-full shrink-0',
-                              s.status === 'active' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'
-                            )}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+              {assignedDevice ? (
+                canWrite && (
+                  <button
+                    onClick={handleUnassignDevice}
+                    disabled={unassigning}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-xs font-mono text-red-400 transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {unassigning ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />}
+                    Unassign Device
+                  </button>
+                )
               ) : (
-                <div className="py-6 text-center space-y-2">
-                  <Radio size={28} className="mx-auto text-[oklch(0.35_0.01_240)]" />
-                  <p className="text-xs text-[oklch(0.50_0.01_240)]">
-                    No IoT device assigned to this machine.
-                  </p>
-                  {canWrite && (
-                    <button
-                      onClick={() => setShowAssignModal(true)}
-                      className="text-xs text-[oklch(0.62_0.20_240)] hover:underline font-medium"
-                    >
-                      + Assign ESP32 device
-                    </button>
-                  )}
-                </div>
+                canWrite && (
+                  <button
+                    onClick={() => setShowAssignModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[oklch(0.62_0.20_240/0.4)] bg-[oklch(0.62_0.20_240/0.15)] hover:bg-[oklch(0.62_0.20_240/0.25)] text-xs font-mono text-white transition-colors cursor-pointer"
+                  >
+                    <Plus size={12} />
+                    Assign ESP32 Gateway
+                  </button>
+                )
               )}
             </div>
 
-            {/* Assign Device Modal */}
-            {showAssignModal && (
-              <AssignDeviceModal
-                machineId={id}
-                machineName={machine.name}
-                isOpen={showAssignModal}
-                onClose={() => setShowAssignModal(false)}
-                onAssigned={fetchMachineDevice}
-              />
-            )}
-            <div className="glass rounded-xl p-5 border-dashed opacity-60">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-7 h-7 rounded-lg border bg-[oklch(0.75_0.18_200/0.15)] border-[oklch(0.75_0.18_200/0.3)] flex items-center justify-center">
-                  <Wrench size={14} className="text-[oklch(0.75_0.18_200)]" />
-                </div>
-                <h3 className="text-sm font-semibold text-white">Maintenance</h3>
-                <span className="text-[9px] font-semibold uppercase tracking-wider bg-[oklch(0.75_0.18_200/0.2)] text-[oklch(0.75_0.18_200)] border border-[oklch(0.75_0.18_200/0.3)] rounded px-1.5 py-0.5 ml-auto">Soon</span>
+            {loadingDevice ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 size={20} className="animate-spin text-[oklch(0.45_0.01_240)]" />
               </div>
-              <p className="text-xs text-[oklch(0.40_0.01_240)]">Maintenance records and schedules will appear here.</p>
-            </div>
+            ) : assignedDevice ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3.5 rounded-xl bg-[oklch(0.12_0.007_240)] border border-[oklch(0.18_0.009_240)] flex-wrap gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[oklch(0.16_0.008_240)] border border-[oklch(0.22_0.01_240)] flex items-center justify-center font-mono font-bold text-xs text-[oklch(0.75_0.18_200)]">
+                      ESP
+                    </div>
+                    <div>
+                      <Link
+                        href={`/devices/${assignedDevice._id}`}
+                        className="font-bold text-white text-xs hover:text-[oklch(0.75_0.18_200)] transition-colors"
+                      >
+                        {assignedDevice.name}
+                      </Link>
+                      <p className="text-[10px] font-mono text-[oklch(0.50_0.01_240)] mt-0.5">
+                        {assignedDevice.deviceId} · FW: {assignedDevice.firmwareVersion || 'v1.0.0'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <DeviceStatusBadge status={assignedDevice.status} size="sm" />
+                    <Link
+                      href={`/devices/${assignedDevice._id}`}
+                      className="text-xs text-[oklch(0.62_0.20_240)] hover:underline font-medium"
+                    >
+                      View Device →
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Connected Sensors Grid */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-[oklch(0.45_0.01_240)]">
+                      Connected Sensors ({machineSensors.length})
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {machineSensors.map((s) => (
+                      <div
+                        key={s._id}
+                        className="p-2.5 rounded-lg bg-[oklch(0.12_0.007_240)] border border-[oklch(0.18_0.009_240)] flex items-center justify-between text-xs"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium text-white truncate text-[11px]">
+                            {s.sensorName.split(' ')[0]}
+                          </p>
+                          <p className="text-[9px] font-mono text-[oklch(0.45_0.01_240)]">
+                            {s.unit} · {s.samplingInterval}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            'w-2 h-2 rounded-full shrink-0',
+                            s.status === 'active' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'
+                          )}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="py-6 text-center space-y-2">
+                <Radio size={28} className="mx-auto text-[oklch(0.35_0.01_240)]" />
+                <p className="text-xs text-[oklch(0.50_0.01_240)]">
+                  No IoT device assigned to this machine.
+                </p>
+                {canWrite && (
+                  <button
+                    onClick={() => setShowAssignModal(true)}
+                    className="text-xs text-[oklch(0.62_0.20_240)] hover:underline font-medium"
+                  >
+                    + Assign ESP32 device
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Right column */}
-          <div className="space-y-4">
-            <InfoCard icon={Info} color="bg-[oklch(0.62_0.20_240/0.15)] text-[oklch(0.62_0.20_240)] border-[oklch(0.62_0.20_240/0.3)]" title="Machine Info">
-              <SpecRow label="UUID" value={machine.uuid?.slice(0, 8) + '...'} />
-              <SpecRow label="Code" value={machine.machineCode} />
-              <SpecRow label="Model" value={machine.modelNumber} />
-              <SpecRow label="Serial" value={machine.serialNumber} />
-              <SpecRow label="Year" value={machine.manufacturingYear} />
-              <SpecRow label="Added by" value={createdByName} />
-              <SpecRow label="Created" value={formatDate(machine.createdAt)} />
+          {/* Assign Device Modal */}
+          {showAssignModal && (
+            <AssignDeviceModal
+              machineId={id}
+              machineName={machine.name}
+              isOpen={showAssignModal}
+              onClose={() => setShowAssignModal(false)}
+              onAssigned={fetchMachineDevice}
+            />
+          )}
+
+          {/* Specifications & Operating Limits Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <InfoCard icon={Zap} color="bg-amber-500/15 text-amber-400 border-amber-500/30" title="Electrical & Acoustic Specs">
+              <SpecRow label="Rated Voltage" value={machine.ratedVoltage} unit="V" />
+              <SpecRow label="Rated Current" value={machine.ratedCurrent} unit="A" />
+              <SpecRow label="Rated Sound Level" value={machine.ratedSound || 65} unit="dB" />
+              <SpecRow label="Rated Vibration" value={machine.ratedVibration || 1.2} unit="mm/s" />
             </InfoCard>
 
-            {/* Digital Twin Coming Soon */}
-            <div className="glass rounded-xl p-5 border-dashed opacity-60">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-7 h-7 rounded-lg border bg-[oklch(0.80_0.17_80/0.15)] border-[oklch(0.80_0.17_80/0.3)] flex items-center justify-center">
-                  <Brain size={14} className="text-[oklch(0.80_0.17_80)]" />
-                </div>
-                <h3 className="text-sm font-semibold text-white">Digital Twin</h3>
-                <span className="text-[9px] font-semibold uppercase tracking-wider bg-[oklch(0.80_0.17_80/0.2)] text-[oklch(0.80_0.17_80)] border border-[oklch(0.80_0.17_80/0.3)] rounded px-1.5 py-0.5 ml-auto">Soon</span>
-              </div>
-              <p className="text-xs text-[oklch(0.40_0.01_240)]">AI-powered digital twin simulation coming in a future module.</p>
-            </div>
+            <InfoCard icon={Gauge} color="bg-[#38BDF8]/15 text-[#38BDF8] border-[#38BDF8]/30" title="Mechanical Specs">
+              <SpecRow label="Rated RPM" value={machine.ratedRPM} unit="RPM" />
+              <SpecRow label="Rated Temperature" value={machine.ratedTemperature} unit="°C" />
+            </InfoCard>
+
+            <InfoCard icon={AlertTriangle} color="bg-rose-500/15 text-rose-400 border-rose-500/30" title="Operating Safety Thresholds">
+              <SpecRow label="Max Temperature" value={machine.operatingLimits?.maxTemperature || 80} unit="°C" />
+              <SpecRow label="Max Vibration" value={machine.operatingLimits?.maxVibration || 2.5} unit="mm/s" />
+              <SpecRow label="Max Current" value={machine.operatingLimits?.maxCurrent || 15} unit="A" />
+              <SpecRow label="Min RPM" value={machine.operatingLimits?.minRPM || 1000} unit="RPM" />
+            </InfoCard>
+
+            <InfoCard icon={Info} color="bg-purple-500/15 text-purple-400 border-purple-500/30" title="Machine Identity & Info">
+              <SpecRow label="UUID" value={machine.uuid ? machine.uuid.slice(0, 8) + '...' : undefined} />
+              <SpecRow label="Code" value={machine.machineCode} />
+              <SpecRow label="Manufacturer" value={machine.manufacturer || 'Industrial Supply Corp'} />
+              <SpecRow label="Model Number" value={machine.modelNumber} />
+              <SpecRow label="Serial Number" value={machine.serialNumber} />
+              <SpecRow label="Manufacturing Year" value={machine.manufacturingYear} />
+              <SpecRow label="Added by" value={createdByName} />
+            </InfoCard>
+
+            <InfoCard icon={Calendar} color="bg-[#34D399]/15 text-[#34D399] border-[#34D399]/30" title="Lifecycle Audit">
+              <SpecRow label="Installation Date" value={machine.installationDate ? formatDate(machine.installationDate) : undefined} />
+              <SpecRow label="Commissioning Date" value={machine.commissioningDate ? formatDate(machine.commissioningDate) : undefined} />
+              <SpecRow label="Created Date" value={formatDate(machine.createdAt)} />
+              <SpecRow label="Last Updated" value={formatDate(machine.updatedAt)} />
+            </InfoCard>
           </div>
-        </div>
-      )}
-
-      {activeTab === 'Specifications & Limits' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in font-mono">
-          <InfoCard icon={Zap} color="bg-amber-500/15 text-amber-400 border-amber-500/30" title="Electrical & Acoustic Specs">
-            <SpecRow label="Rated Voltage" value={machine.ratedVoltage} unit="V" />
-            <SpecRow label="Rated Current" value={machine.ratedCurrent} unit="A" />
-            <SpecRow label="Rated Sound Level" value={machine.ratedSound || 65} unit="dB" />
-            <SpecRow label="Rated Vibration" value={machine.ratedVibration || 1.2} unit="mm/s" />
-          </InfoCard>
-
-          <InfoCard icon={Gauge} color="bg-[#38BDF8]/15 text-[#38BDF8] border-[#38BDF8]/30" title="Mechanical Specs">
-            <SpecRow label="Rated RPM" value={machine.ratedRPM} unit="RPM" />
-            <SpecRow label="Rated Temperature" value={machine.ratedTemperature} unit="°C" />
-          </InfoCard>
-
-          <InfoCard icon={AlertTriangle} color="bg-rose-500/15 text-rose-400 border-rose-500/30" title="Operating Safety Thresholds">
-            <SpecRow label="Max Temperature" value={machine.operatingLimits?.maxTemperature || 80} unit="°C" />
-            <SpecRow label="Max Vibration" value={machine.operatingLimits?.maxVibration || 2.5} unit="mm/s" />
-            <SpecRow label="Max Current" value={machine.operatingLimits?.maxCurrent || 15} unit="A" />
-            <SpecRow label="Min RPM" value={machine.operatingLimits?.minRPM || 1000} unit="RPM" />
-          </InfoCard>
-
-          <InfoCard icon={Info} color="bg-purple-500/15 text-purple-400 border-purple-500/30" title="Machine Identity">
-            <SpecRow label="UUID" value={machine.uuid ? machine.uuid.slice(0, 8) + '...' : undefined} />
-            <SpecRow label="Code" value={machine.machineCode} />
-            <SpecRow label="Manufacturer" value={machine.manufacturer || 'Industrial Supply Corp'} />
-            <SpecRow label="Model Number" value={machine.modelNumber} />
-            <SpecRow label="Serial Number" value={machine.serialNumber} />
-            <SpecRow label="Manufacturing Year" value={machine.manufacturingYear} />
-          </InfoCard>
-
-          <InfoCard icon={Calendar} color="bg-[#34D399]/15 text-[#34D399] border-[#34D399]/30" title="Lifecycle Audit">
-            <SpecRow label="Installation Date" value={machine.installationDate ? formatDate(machine.installationDate) : undefined} />
-            <SpecRow label="Commissioning Date" value={machine.commissioningDate ? formatDate(machine.commissioningDate) : undefined} />
-            <SpecRow label="Created Date" value={formatDate(machine.createdAt)} />
-            <SpecRow label="Last Updated" value={formatDate(machine.updatedAt)} />
-          </InfoCard>
         </div>
       )}
 

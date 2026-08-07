@@ -30,7 +30,20 @@ export interface RejectedPayloadRecord {
   rawPayload: string;
 }
 
+const DEVICE_CACHE = new Map<string, any>();
+
 export class IngestionService {
+  /**
+   * Clear or invalidate cached device instance
+   */
+  public static invalidateDeviceCache(deviceId?: string): void {
+    if (deviceId) {
+      DEVICE_CACHE.delete(deviceId.toUpperCase());
+    } else {
+      DEVICE_CACHE.clear();
+    }
+  }
+
   /**
    * Main entry point to process MQTT payload received from broker or ESP32 bridge.
    */
@@ -62,7 +75,8 @@ export class IngestionService {
     }
 
     const deviceId = (payload.deviceId || topicDeviceId || 'ESP32_HARDWARE').trim();
-    
+    const cacheKey = deviceId.toUpperCase();
+
     // 1. Timestamp fallback: if missing or invalid, default to server current time
     let parsedDate = new Date();
     if (payload.timestamp) {
@@ -102,13 +116,20 @@ export class IngestionService {
     const soundVal = Number(payload.sound ?? 320);
     const humVal = Number(payload.humidity ?? 55.0);
 
-    // 3. Look up Device in MongoDB (by deviceId or Device Name)
-    let device = await Device.findOne({
-      $or: [
-        { deviceId: { $regex: new RegExp(`^${deviceId}$`, 'i') } },
-        { name: { $regex: new RegExp(`^${deviceId}$`, 'i') } },
-      ],
-    }).exec();
+    // 3. Look up Device in Cache or MongoDB
+    let device = DEVICE_CACHE.get(cacheKey);
+    if (!device) {
+      device = await Device.findOne({
+        $or: [
+          { deviceId: { $regex: new RegExp(`^${deviceId}$`, 'i') } },
+          { name: { $regex: new RegExp(`^${deviceId}$`, 'i') } },
+        ],
+      }).exec();
+
+      if (device) {
+        DEVICE_CACHE.set(cacheKey, device);
+      }
+    }
 
     if (!device) {
       // In development mode or for ESP32 hardware convenience, auto-create device under active company

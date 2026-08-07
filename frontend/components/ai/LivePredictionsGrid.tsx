@@ -54,7 +54,7 @@ export function LivePredictionsGrid({ currentReading, operatingLimits = {} }: Li
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {SENSORS.map((s) => {
           const Icon = s.icon;
-          const currVal = currentReading ? currentReading[s.key] : 0;
+          const currVal = currentReading ? currentReading[s.key] : null;
           
           let ratedVal = 0;
           let limitVal = operatingLimits[s.limitKey] || defaultLimits[s.limitKey] || 100;
@@ -63,60 +63,56 @@ export function LivePredictionsGrid({ currentReading, operatingLimits = {} }: Li
           if (s.key === 'temperature') {
             ratedVal = operatingLimits.ratedTemperature || 45;
             limitVal = operatingLimits.maxTemperature || defaultLimits.maxTemperature || 80;
-            if (currVal <= ratedVal) {
-              stressPct = 0;
-            } else {
+            if (currVal !== null && currVal > ratedVal) {
               const range = Math.max(1, limitVal - ratedVal);
               stressPct = Math.min(100, Math.round(((currVal - ratedVal) / range) * 100));
             }
           } else if (s.key === 'current') {
             ratedVal = operatingLimits.ratedCurrent || 3.0;
             limitVal = operatingLimits.maxCurrent || defaultLimits.maxCurrent || 15;
-            if (currVal <= ratedVal) {
-              stressPct = 0;
-            } else {
+            if (currVal !== null && currVal > ratedVal) {
               const range = Math.max(1, limitVal - ratedVal);
               stressPct = Math.min(100, Math.round(((currVal - ratedVal) / range) * 100));
             }
           } else if (s.key === 'vibration') {
             ratedVal = operatingLimits.ratedVibration || 0.15;
             limitVal = operatingLimits.maxVibration || defaultLimits.maxVibration || 2.5;
-            if (currVal <= ratedVal) {
-              stressPct = 0;
-            } else {
+            if (currVal !== null && currVal > ratedVal) {
               const range = Math.max(0.1, limitVal - ratedVal);
               stressPct = Math.min(100, Math.round(((currVal - ratedVal) / range) * 100));
             }
           } else if (s.key === 'sound') {
             ratedVal = operatingLimits.ratedSound || 60;
             limitVal = operatingLimits.maxSound || defaultLimits.maxSound || 85;
-            if (currVal <= ratedVal) {
-              stressPct = 0;
-            } else {
+            if (currVal !== null && currVal > ratedVal) {
               const range = Math.max(1, limitVal - ratedVal);
               stressPct = Math.min(100, Math.round(((currVal - ratedVal) / range) * 100));
             }
           } else if (s.key === 'voltage') {
-            ratedVal = operatingLimits.ratedVoltage || 230;
-            limitVal = 250;
-            const dev = Math.abs(currVal - ratedVal);
-            stressPct = Math.min(100, Math.round((dev / ratedVal) * 100));
+            limitVal = operatingLimits.ratedVoltage || defaultLimits.ratedVoltage || 230;
+            const deviation = currVal !== null ? Math.abs(currVal - 230) : 0;
+            stressPct = Math.min(100, Math.round((deviation / 40) * 100));
           } else if (s.key === 'rpm') {
-            const minRPM = operatingLimits.minRPM || defaultLimits.minRPM || 1000;
-            const ratedRPM = operatingLimits.ratedRPM || 1500;
-            ratedVal = ratedRPM;
-            limitVal = minRPM;
-            const drop = Math.max(0, ratedRPM - currVal);
-            stressPct = Math.min(100, Math.round((drop / Math.max(1, ratedRPM - minRPM)) * 100));
+            limitVal = operatingLimits.minRPM || defaultLimits.minRPM || 1500;
+            if (currVal !== null && currVal < limitVal) {
+              stressPct = Math.min(100, Math.round(((limitVal - currVal) / limitVal) * 100));
+            }
           }
 
-          const isElevated = stressPct > 40;
-          const isWarning = stressPct > 70;
+          const isWarning = stressPct >= 75;
+          const isElevated = stressPct >= 35;
 
           return (
             <div
               key={s.key}
-              className="rounded-xl border border-[#1B1E2B] bg-[#0B0C12] p-3 space-y-2 relative overflow-hidden group hover:border-[#262B3F] transition-all"
+              className={cn(
+                'bg-[#0F111A] border p-3 rounded-xl flex flex-col justify-between space-y-3 transition-all',
+                isWarning
+                  ? 'border-[#FF1744]/40 bg-[#FF1744]/5'
+                  : isElevated
+                  ? 'border-[#FFB300]/40 bg-[#FFB300]/5'
+                  : 'border-[#1E202E]'
+              )}
             >
               <div className="flex items-center justify-between">
                 <Icon size={14} className={s.color} />
@@ -126,7 +122,7 @@ export function LivePredictionsGrid({ currentReading, operatingLimits = {} }: Li
               <div>
                 <p className="text-[9px] text-[#64748B]">CURRENT VALUE</p>
                 <p className="text-sm font-bold text-white tabular-nums">
-                  {currVal} {s.unit}
+                  {currVal !== null ? `${currVal} ${s.unit}` : `-- ${s.unit}`}
                 </p>
               </div>
 

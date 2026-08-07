@@ -245,13 +245,27 @@ export class SimulationService {
     const session = ACTIVE_SIMULATIONS.get(machineId);
     if (!session || session.isPaused) return;
 
-    // Base interval = 5000ms (5 seconds)
-    // 1x = 5000ms, 5x = 1000ms, 10x = 500ms, 100x = 50ms
-    const baseInterval = 5000;
-    const intervalMs = Math.max(50, Math.round(baseInterval / (session.speed || 1)));
+    const speed = Math.max(1, session.speed || 1);
+    let intervalMs = 2500;
+    let stepMultiplier = 1;
+
+    if (speed === 1) {
+      intervalMs = 2500;
+      stepMultiplier = 1;
+    } else if (speed <= 5) {
+      intervalMs = 800;
+      stepMultiplier = 1.6;
+    } else if (speed <= 10) {
+      intervalMs = 350;
+      stepMultiplier = 1.4;
+    } else {
+      // 100x speed: 100ms interval with 5x progression per tick
+      intervalMs = 100;
+      stepMultiplier = 5.0;
+    }
 
     session.timer = setTimeout(async () => {
-      await this.executeSimulationStep(machineId);
+      await this.executeSimulationStep(machineId, stepMultiplier);
       this.scheduleNextTick(machineId);
     }, intervalMs);
   }
@@ -259,12 +273,12 @@ export class SimulationService {
   /**
    * Execute 1 simulation step and pass payload into standard IngestionService pipeline
    */
-  private static async executeSimulationStep(machineId: string): Promise<void> {
+  private static async executeSimulationStep(machineId: string, stepMultiplier = 1): Promise<void> {
     const session = ACTIVE_SIMULATIONS.get(machineId);
     if (!session) return;
 
     session.stepCount += 1;
-    const nextVals = this.calculateNextSensorValues(session);
+    const nextVals = this.calculateNextSensorValues(session, stepMultiplier);
     session.currentValues = nextVals;
 
     const payload = {
@@ -323,14 +337,14 @@ export class SimulationService {
   /**
    * Compute realistic progressive sensor behavior per profile tick
    */
-  private static calculateNextSensorValues(session: ISimulationSession) {
-    const { profile, stepCount, overrides, currentValues } = session;
+  private static calculateNextSensorValues(session: ISimulationSession, mult = 1) {
+    const { profile, stepCount, currentValues } = session;
     const noise = (amplitude: number) => (Math.random() - 0.5) * 2 * amplitude;
 
     let { temperature, vibration, current, voltage, rpm, sound } = currentValues;
 
     if (profile === 'normal_operation') {
-      temperature = Math.min(65, temperature + 0.05 + noise(0.2));
+      temperature = Math.min(65, temperature + (0.05 * mult) + noise(0.2));
       vibration = Math.max(0.05, 0.14 + noise(0.02));
       current = Math.max(1.0, 3.4 + noise(0.1));
       voltage = Math.max(210, Math.min(240, 230.0 + noise(0.8)));
@@ -338,41 +352,42 @@ export class SimulationService {
       sound = Math.max(50, 62.0 + noise(0.5));
     } else if (profile === 'bearing_failure') {
       // Rapid temp & vibration rise, sound increase, rpm decrease
-      temperature = Math.min(105, temperature + 0.6 + noise(0.2));
-      vibration = Math.min(6.0, vibration + 0.08 + noise(0.05));
-      sound = Math.min(100, sound + 0.5 + noise(0.4));
-      rpm = Math.max(600, rpm - 2.5 + noise(4));
-      current = Math.min(15, current + 0.05 + noise(0.1));
+      temperature = Math.min(105, temperature + (0.6 * mult) + noise(0.2));
+      vibration = Math.min(6.0, vibration + (0.08 * mult) + noise(0.05));
+      sound = Math.min(100, sound + (0.5 * mult) + noise(0.4));
+      rpm = Math.max(600, rpm - (2.5 * mult) + noise(4));
+      current = Math.min(15, current + (0.05 * mult) + noise(0.1));
       voltage = 228.0 + noise(1.0);
     } else if (profile === 'motor_overload') {
       // Current spikes, temp rises, rpm drops
-      current = Math.min(22.0, current + 0.35 + noise(0.2));
-      temperature = Math.min(100, temperature + 0.5 + noise(0.2));
-      rpm = Math.max(700, rpm - 3.0 + noise(5));
-      vibration = Math.min(4.0, vibration + 0.03 + noise(0.03));
-      sound = Math.min(92, sound + 0.3 + noise(0.3));
-      voltage = Math.max(195, voltage - 0.2 + noise(0.5));
+      current = Math.min(22.0, current + (0.35 * mult) + noise(0.2));
+      temperature = Math.min(100, temperature + (0.5 * mult) + noise(0.2));
+      rpm = Math.max(700, rpm - (3.0 * mult) + noise(5));
+      vibration = Math.min(4.0, vibration + (0.03 * mult) + noise(0.03));
+      sound = Math.min(92, sound + (0.3 * mult) + noise(0.3));
+      voltage = Math.max(195, voltage - (0.2 * mult) + noise(0.5));
     } else if (profile === 'loose_belt') {
       // RPM & vibration oscillate wildly, current fluctuates
-      const sineVal = Math.sin(stepCount * 0.4);
+      const sineVal = Math.sin(stepCount * 0.4 * mult);
       rpm = Math.max(900, Math.min(1600, 1380 + sineVal * 150 + noise(10)));
       vibration = Math.max(0.2, Math.min(3.5, 1.2 + Math.abs(sineVal) * 1.2 + noise(0.08)));
       current = Math.max(2.0, Math.min(8.0, 4.0 + sineVal * 1.5 + noise(0.2)));
-      temperature = Math.min(75, temperature + 0.1 + noise(0.1));
-      sound = Math.max(55, 68.0 + sineVal * 5 + noise(0.5));
-      voltage = 230.0 + noise(0.8);
+      temperature = Math.min(75, temperature + (0.1 * mult) + noise(0.1));
+      sound = Math.max(55, Math.min(85, 68.0 + noise(0.5)));
+      voltage = 230.0 + noise(0.5);
     } else if (profile === 'voltage_fluctuation') {
-      // Voltage oscillates between 190V-250V, current inverse, temp slowly rises
-      const sineVal = Math.sin(stepCount * 0.3);
-      voltage = Math.max(185, Math.min(255, 220.0 + sineVal * 25.0 + noise(1.5)));
-      current = Math.max(1.5, Math.min(12.0, (230.0 / Math.max(180, voltage)) * 3.8 + noise(0.2)));
-      temperature = Math.min(80, temperature + 0.15 + noise(0.1));
-      vibration = Math.max(0.1, 0.2 + noise(0.03));
-      rpm = Math.max(1100, Math.min(1550, 1460 + sineVal * 40 + noise(8)));
-      sound = Math.max(55, 64.0 + noise(0.5));
+      // Severe voltage sags and surges
+      const voltPulse = (Math.random() - 0.5) * 35 * mult;
+      voltage = Math.max(170, Math.min(260, 230.0 + voltPulse));
+      current = Math.max(1.0, Math.min(15.0, 3.8 * (230 / Math.max(170, voltage)) + noise(0.2)));
+      rpm = Math.max(1000, Math.min(1550, 1460 + (voltage - 230) * 1.5 + noise(8)));
+      temperature = Math.min(80, temperature + (0.08 * mult) + noise(0.1));
+      vibration = Math.max(0.1, 0.2 + (Math.abs(voltage - 230) / 50) + noise(0.02));
+      sound = Math.max(50, 64.0 + noise(0.5));
     }
 
     // Override values if user explicitly locked/controlled them
+    const { overrides } = session;
     if (overrides.temperature !== undefined) temperature = overrides.temperature;
     if (overrides.vibration !== undefined) vibration = overrides.vibration;
     if (overrides.current !== undefined) current = overrides.current;

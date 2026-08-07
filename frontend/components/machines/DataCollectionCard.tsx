@@ -45,7 +45,11 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
     try {
       const res = await import('@/api/datasets').then(m => m.datasetsApi.getByMachine(machine._id || machine.id));
       if (res.data.success && res.data.data) {
-        setAvailableDatasets(res.data.data);
+        const list = res.data.data;
+        setAvailableDatasets(list);
+        // Initialize selectedDatasetIds with datasets active in MongoDB (or all if none specified)
+        const activeIds = list.filter((d: any) => d.isActive).map((d: any) => d._id);
+        setSelectedDatasetIds(activeIds.length > 0 ? activeIds : list.map((d: any) => d._id));
       }
     } catch (err) {
       console.error(err);
@@ -70,10 +74,17 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
   const isReadyForTraining = sampleCount >= threshold;
   const isRetrainingRecommended = machine.aiLifecycleStatus === 'retraining_recommended';
 
-  const handleToggleDataset = (id: string) => {
+  const handleToggleDataset = async (id: string) => {
     setSelectedDatasetIds(prev =>
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
+    try {
+      const { datasetsApi } = await import('@/api/datasets');
+      await datasetsApi.activateVersion(id);
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleTrainModel = async () => {
@@ -164,13 +175,44 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <AILifecycleBadge
-            status={machine.aiLifecycleStatus}
-            sampleCount={sampleCount}
-            threshold={threshold}
-            size="md"
-          />
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Save Progress as Dataset */}
+          {sampleCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowSaveConfirm(true)}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-all active:scale-95 shadow-sm"
+            >
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              Save as Dataset
+            </button>
+          )}
+
+          {/* CSV Download */}
+          {sampleCount > 0 && (
+            <button
+              type="button"
+              onClick={handleDownloadCSV}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-[#2B3350] bg-[#141828] hover:bg-[#1A2035] text-[#38BDF8] transition-all active:scale-95 shadow-sm"
+            >
+              <Download size={13} />
+              CSV
+            </button>
+          )}
+
+          {/* Clear Live Dataset */}
+          {sampleCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-all active:scale-95 shadow-sm"
+            >
+              <Trash2 size={13} />
+              Clear Live Dataset
+            </button>
+          )}
+
           <RecordingToggle
             machineId={machine._id || machine.id}
             initialRecording={machine.isRecording}
@@ -217,15 +259,10 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
         )}
 
         {/* Readiness Notification Box */}
-        {isReadyForTraining ? (
+        {isReadyForTraining && (
           <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#34D399]/10 border border-[#34D399]/30 text-[#34D399] text-xs font-mono">
             <CheckCircle2 size={16} className="shrink-0 text-[#34D399]" />
             <span>Sufficient data available for training ({sampleCount.toLocaleString()} samples). You can train the production AI model now.</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#38BDF8]/10 border border-[#38BDF8]/30 text-[#38BDF8] text-xs font-mono">
-            <Clock size={16} className="shrink-0 text-[#38BDF8] animate-pulse" />
-            <span>Collecting telemetry data: <strong>{sampleCount.toLocaleString()} / {threshold.toLocaleString()}</strong> samples recorded. Minimum {threshold.toLocaleString()} samples required for production training.</span>
           </div>
         )}
 
@@ -258,123 +295,11 @@ export const DataCollectionCard: React.FC<Props> = ({ machine, onRefresh }) => {
           </span>
         </div>
         <div className="bg-[#0E101B] p-3.5 rounded-2xl border border-[#1C2034]">
-          <span className="text-[#64748B] text-[10px] uppercase font-bold tracking-wider block">New Samples</span>
+          <span className="text-[#64748B] text-[10px] uppercase font-bold tracking-wider block">Collecting Data</span>
           <span className="text-[#34D399] font-extrabold text-xs block mt-1">
-            {stats.newSamplesSinceLastTraining || 0}
+            {sampleCount.toLocaleString()} / {threshold.toLocaleString()}
           </span>
         </div>
-      </div>
-
-      {/* Multi-Dataset Selection Panel */}
-      {availableDatasets.length > 0 && (
-        <div className="bg-[#0E101B] p-4 rounded-2xl border border-[#1C2034] space-y-3 relative z-10 font-mono">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-              <Database size={14} className="text-[#38BDF8]" />
-              SELECT TRAINING DATASETS (TIME-AWARE SEQUENCE POOLING)
-            </span>
-            <span className="text-[10px] text-[#38BDF8] bg-[#38BDF8]/10 px-2 py-0.5 rounded border border-[#38BDF8]/20 font-bold">
-              {selectedDatasetIds.length === 0 ? 'All Datasets Merged' : `${selectedDatasetIds.length} Selected`}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-            {availableDatasets.map((d) => {
-              const isChecked = selectedDatasetIds.includes(d._id);
-              return (
-                <div
-                  key={d._id}
-                  onClick={() => handleToggleDataset(d._id)}
-                  className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                    isChecked
-                      ? 'bg-[#121A30] border-[#38BDF8] text-white shadow-[0_0_10px_rgba(56,189,248,0.2)]'
-                      : 'bg-[#121626] border-[#202740] text-[#94A3B8] hover:border-[#2B3555]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => {}}
-                      className="rounded border-[#2B3555] bg-[#0E101B] text-[#38BDF8] focus:ring-0 cursor-pointer"
-                    />
-                    <div>
-                      <span className="font-bold block text-[11px] text-white">{d.datasetName || `Dataset v${d.version}`}</span>
-                      <span className="text-[9px] text-[#64748B] block">{(d.rowCount || 0).toLocaleString()} rows · {d.status}</span>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-bold text-[#38BDF8]">v{d.version}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Action Buttons Ribbon */}
-      <div className="flex items-center justify-between gap-3 pt-1 flex-wrap relative z-10 font-mono">
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Train / Retrain */}
-          <button
-            type="button"
-            onClick={handleTrainModel}
-            disabled={training || (!isReadyForTraining && !isRetrainingRecommended)}
-            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold text-white transition-all shadow-lg active:scale-95 ${
-              isReadyForTraining || isRetrainingRecommended
-                ? 'bg-gradient-to-r from-[#38BDF8] via-[#3B82F6] to-[#6366F1] hover:from-[#60A5FA] hover:to-[#4F46E5] shadow-[0_0_20px_rgba(56,189,248,0.3)] cursor-pointer'
-                : 'bg-[#141828] border border-[#232940] text-[#64748B] cursor-not-allowed opacity-75'
-            } ${training ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            {training ? (
-              <Loader2 size={14} className="animate-spin text-[#38BDF8]" />
-            ) : (
-              <BrainCircuit size={14} className={isReadyForTraining ? 'text-white' : 'text-[#64748B]'} />
-            )}
-            {training
-              ? 'Training AI Model...'
-              : isRetrainingRecommended
-              ? 'Retrain Model'
-              : isReadyForTraining
-              ? 'Train AI Model'
-              : `Collecting Data (${sampleCount.toLocaleString()} / ${threshold.toLocaleString()})`}
-          </button>
-
-          {/* Save Progress as Dataset */}
-          {sampleCount > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowSaveConfirm(true)}
-              disabled={saving}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-bold border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-all active:scale-95 shadow-sm"
-            >
-              {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-              Save as Dataset
-            </button>
-          )}
-
-          {/* CSV Download */}
-          {sampleCount > 0 && (
-            <button
-              type="button"
-              onClick={handleDownloadCSV}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-bold border border-[#2B3350] bg-[#141828] hover:bg-[#1A2035] text-[#38BDF8] transition-all active:scale-95 shadow-sm"
-            >
-              <Download size={14} />
-              CSV
-            </button>
-          )}
-        </div>
-
-        {sampleCount > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowClearConfirm(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-bold border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-all active:scale-95 shadow-sm"
-          >
-            <Trash2 size={14} />
-            Clear Dataset
-          </button>
-        )}
       </div>
 
       {/* Save Progress Confirmation Modal */}

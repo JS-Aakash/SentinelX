@@ -72,7 +72,7 @@ export function SensorCard({ label, value, unit, icon: Icon, status, trend, last
 
   // Calculate generic progress percentage for gauge line
   let pct = 0;
-  if (value != null) {
+  if (status !== 'offline' && value != null) {
     pct = Math.min(100, Math.max(8, (value / (unit === '°C' ? 100 : unit === 'RPM' ? 4000 : 300)) * 100));
   }
 
@@ -110,7 +110,7 @@ export function SensorCard({ label, value, unit, icon: Icon, status, trend, last
         <div className="flex items-baseline justify-between">
           <div className="flex items-baseline gap-1.5">
             <span className="text-3xl font-bold font-mono tracking-tight text-white tabular-nums">
-              {value != null ? value.toFixed(1) : '—'}
+              {status === 'offline' || value == null ? '—' : value.toFixed(1)}
             </span>
             <span className="text-xs font-mono font-medium text-[#64748B]">{unit}</span>
           </div>

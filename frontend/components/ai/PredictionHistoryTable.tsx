@@ -1,17 +1,34 @@
 'use client';
 
 import { useState } from 'react';
-import { Layers, Download, Search, ChevronLeft, ChevronRight } from 'lucide-react';
-import { PredictionRecord } from '@/api/ai';
+import { Layers, Download, Search, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { PredictionRecord, aiApi } from '@/api/ai';
 import { cn, formatDate } from '@/lib/utils';
 
 interface PredictionHistoryTableProps {
+  machineId?: string;
   history?: PredictionRecord[];
   total?: number;
+  onRefresh?: () => void;
 }
 
-export function PredictionHistoryTable({ history = [], total = 0 }: PredictionHistoryTableProps) {
+export function PredictionHistoryTable({ machineId, history = [], total = 0, onRefresh }: PredictionHistoryTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [clearing, setClearing] = useState(false);
+
+  const handleClearHistory = async () => {
+    if (!machineId) return;
+    if (!confirm('Are you sure you want to permanently delete all prediction logs & audit trail records for this machine?')) return;
+    try {
+      setClearing(true);
+      await aiApi.clearPredictionHistory(machineId);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to clear prediction logs');
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const filteredHistory = history.filter((rec) => {
     if (!searchTerm.trim()) return true;
@@ -74,6 +91,18 @@ export function PredictionHistoryTable({ history = [], total = 0 }: PredictionHi
           >
             <Download size={13} /> EXPORT CSV
           </button>
+
+          {machineId && (
+            <button
+              type="button"
+              onClick={handleClearHistory}
+              disabled={clearing || history.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs font-semibold text-rose-400 hover:bg-rose-500/20 px-3 py-1.5 transition-all disabled:opacity-40 cursor-pointer"
+              title="Delete all prediction logs & audit trail records for this machine"
+            >
+              <Trash2 size={13} /> CLEAR LOG
+            </button>
+          )}
         </div>
       </div>
 

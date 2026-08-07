@@ -22,21 +22,22 @@ export function RSOTCard({
   remainingOperatingHours,
   estimatedMaintenanceDate,
   estimatedFailureWindow,
-  confidenceScore = 93,
+  confidenceScore,
   primaryDegradingSensors = [],
   rsotFormatted,
   violatingSensor,
 }: TimeAwareMaintenanceCardProps) {
-  // Dynamic fallback calculation if live prediction hasn't populated state yet
-  const ageDays = machineAgeDays !== undefined && machineAgeDays !== null ? machineAgeDays : 185;
-  const opHours = operatingHours !== undefined && operatingHours !== null ? operatingHours : Math.round(ageDays * 24 * 0.4);
-  const rulHours = remainingOperatingHours !== undefined && remainingOperatingHours !== null ? remainingOperatingHours : 2450;
-  const estDate = estimatedMaintenanceDate || new Date(Date.now() + rulHours * 3600 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  const estWindow = estimatedFailureWindow || 'Next 6-12 Months';
+  const hasRul = remainingOperatingHours !== undefined && remainingOperatingHours !== null;
+  const rulHours = hasRul ? remainingOperatingHours! : null;
 
-  const isHealthy = rulHours >= 1000;
-  const isWarning = rulHours < 1000 && rulHours >= 300;
-  const isCritical = rulHours < 300;
+  const ageDays = machineAgeDays !== undefined && machineAgeDays !== null ? machineAgeDays : null;
+  const opHours = operatingHours !== undefined && operatingHours !== null ? operatingHours : null;
+  const estDate = estimatedMaintenanceDate || (rulHours !== null ? new Date(Date.now() + rulHours * 3600 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A');
+  const estWindow = estimatedFailureWindow || (rulHours !== null ? 'Predictive Maintenance Active' : 'Awaiting Data');
+
+  const isHealthy = rulHours === null || rulHours >= 1000;
+  const isWarning = rulHours !== null && rulHours < 1000 && rulHours >= 300;
+  const isCritical = rulHours !== null && rulHours < 300;
 
   const displayPrimaryCauses = primaryDegradingSensors && primaryDegradingSensors.length > 0
     ? primaryDegradingSensors.join(', ')
@@ -82,7 +83,7 @@ export function RSOTCard({
                 isCritical ? 'text-[#FF1744]' : isWarning ? 'text-[#FFB300]' : 'text-[#00E676]'
               )}
             >
-              {rulHours ? `${rulHours.toLocaleString()} h` : '2,450 h'}
+              {rulHours !== null ? `${rulHours.toLocaleString()} h` : '-- h'}
             </span>
             <span className="text-[10px] text-[#64748B] block mt-0.5">Estimated RUL</span>
           </div>
@@ -110,7 +111,10 @@ export function RSOTCard({
           </div>
           <div className="mt-2">
             <span className="text-lg font-bold text-white font-mono block">
-              {ageDays} Days <span className="text-xs text-[#64748B] font-normal">({opHours.toLocaleString()} h)</span>
+              {ageDays !== null ? `${ageDays} Days` : '-- Days'}{' '}
+              <span className="text-xs text-[#64748B] font-normal">
+                ({opHours !== null ? `${opHours.toLocaleString()} h` : '-- h'})
+              </span>
             </span>
             <span className="text-[10px] text-[#64748B] block mt-0.5">Total Accumulated Operating Time</span>
           </div>
@@ -124,7 +128,7 @@ export function RSOTCard({
           </div>
           <div className="mt-2">
             <span className="text-2xl font-black text-emerald-400 font-mono tracking-tight block">
-              {confidenceScore}%
+              {confidenceScore !== undefined && confidenceScore !== null ? `${confidenceScore}%` : '--%'}
             </span>
             <span className="text-[10px] text-[#64748B] block mt-0.5">Time-Aware XGBoost Degradation Model</span>
           </div>

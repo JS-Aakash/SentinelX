@@ -18,13 +18,19 @@ export const authenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
+    let token: string | undefined;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.query && typeof req.query.token === 'string') {
+      token = req.query.token;
+    }
+
+    if (!token) {
       throw ApiError.unauthorized('No authentication token provided');
     }
 
-    const token = authHeader.split(' ')[1];
     const decoded = tokenService.verifyAccessToken(token);
 
     // Verify user still exists and is active

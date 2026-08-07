@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { History, Search, Download, Filter, RefreshCw, CheckCircle, ShieldAlert } from 'lucide-react';
+import { History, Search, Download, Filter, RefreshCw, CheckCircle, ShieldAlert, Trash2 } from 'lucide-react';
 import { AnomalyEventRecord, anomalyApi } from '@/api/anomaly';
 import { cn, formatDate } from '@/lib/utils';
 
@@ -37,6 +37,19 @@ export function AnomalyHistoryTable({ machineId }: AnomalyHistoryTableProps) {
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
+
+  const handleClearHistory = async () => {
+    if (!confirm('Are you sure you want to permanently delete all anomaly audit log & historical events for this machine?')) return;
+    try {
+      setLoading(true);
+      await anomalyApi.clearHistory(machineId);
+      await loadHistory();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to clear anomaly history log');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleExportCSV = () => {
     if (events.length === 0) return;
@@ -133,11 +146,22 @@ export function AnomalyHistoryTable({ machineId }: AnomalyHistoryTableProps) {
           </button>
 
           <button
+            type="button"
             onClick={handleExportCSV}
             disabled={events.length === 0}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#141724] border border-[#262A3E] text-xs font-semibold text-[#00F2FE] hover:bg-[#1E2336] px-3 py-1.5 transition-all disabled:opacity-40"
           >
             <Download size={13} /> EXPORT
+          </button>
+
+          <button
+            type="button"
+            onClick={handleClearHistory}
+            disabled={loading || events.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs font-semibold text-rose-400 hover:bg-rose-500/20 px-3 py-1.5 transition-all disabled:opacity-40 cursor-pointer"
+            title="Delete all anomaly audit log & historical events for this machine"
+          >
+            <Trash2 size={13} /> CLEAR LOG
           </button>
         </div>
       </div>

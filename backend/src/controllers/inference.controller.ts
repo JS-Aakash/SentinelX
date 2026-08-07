@@ -178,3 +178,11 @@ export const getAIAlerts = asyncHandler(async (req: Request, res: Response): Pro
 
   sendSuccess(res, 'AI alerts log retrieved', alertsLog);
 });
+
+export const clearPredictionHistory = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { machineId } = req.params as Record<string, string>;
+  const companyId = req.user!.companyId.toString();
+
+  const result = await PredictionHistory.deleteMany({ machineId, companyId });
+  sendSuccess(res, 'Prediction logs & audit trail cleared successfully', { deletedCount: result.deletedCount });
+});

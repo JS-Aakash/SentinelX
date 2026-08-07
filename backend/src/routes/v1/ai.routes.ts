@@ -17,6 +17,7 @@ import {
   getAIDashboard,
   getRecommendations,
   getAIAlerts,
+  clearPredictionHistory,
 } from '../../controllers/inference.controller';
 
 const router = Router();
@@ -36,6 +37,8 @@ router.delete('/model/:modelId', deleteModelVersion);
 router.post('/predict/:machineId', triggerLiveInference);
 router.get('/latest/:machineId', getLatestPrediction);
 router.get('/predictions/history/:machineId', getPredictionHistory);
+router.delete('/predictions/history/:machineId/clear', clearPredictionHistory);
+router.post('/predictions/history/:machineId/clear', clearPredictionHistory);
 router.get('/history/:machineId', getPredictionHistory); // Fallback alias
 router.get('/forecast/:machineId', getActiveForecast);
 router.get('/dashboard/:machineId', getAIDashboard);

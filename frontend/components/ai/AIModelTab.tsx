@@ -26,6 +26,7 @@ import {
   Play,
   Sliders,
   Bell,
+  Loader2,
 } from 'lucide-react';
 import { aiApi, AIModelItem, AIModelStatusResponse, PredictionRecord, AIDashboardResponse } from '@/api/ai';
 import { anomalyApi, AnomalyEventRecord } from '@/api/anomaly';
@@ -385,14 +386,18 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
         </div>
       )}
 
-      {/* ─── VIEW MODE 1: LIVE AI DASHBOARD (If Trained) ─────────────────── */}
-      {isTrained && viewMode === 'dashboard' && (
+      {loading ? (
+        <div className="h-64 flex flex-col items-center justify-center space-y-3 font-mono text-xs text-[#64748B] border border-[#1B1E2B] rounded-2xl bg-[#0B0C12]">
+          <Loader2 size={24} className="animate-spin text-[#00F2FE]" />
+          <span>Loading AI Predictive Analytics & Model Status...</span>
+        </div>
+      ) : isTrained && viewMode === 'dashboard' ? (
         <div className="space-y-6 animate-fade-in">
           {/* Top Metric Cards: Health Score + RSOT */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
             <HealthScoreCard
-              score={latestPrediction?.healthScore || 100}
-              status={latestPrediction?.healthStatus || 'Excellent'}
+              score={latestPrediction?.healthScore}
+              status={latestPrediction?.healthStatus}
               currentReading={latestPrediction?.currentReading}
               operatingLimits={dashboardData?.machine?.operatingLimits}
             />
@@ -447,9 +452,9 @@ export function AIModelTab({ machineId }: AIModelTabProps) {
           <AnomalyHistoryTable machineId={machineId} />
 
           {/* Prediction History Matrix & Export */}
-          <PredictionHistoryTable history={predLogs} />
+          <PredictionHistoryTable machineId={machineId} history={predLogs} onRefresh={loadDashboardData} />
         </div>
-      )}
+      ) : null}
 
       {/* ─── VIEW MODE 2: MODEL MANAGEMENT (Cards & Rollback Matrix) ──── */}
       {(!isTrained || viewMode === 'management') && (
